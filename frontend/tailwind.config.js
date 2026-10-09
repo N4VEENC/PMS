@@ -9,7 +9,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Manrope', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'sans-serif']
+        sans: ['IBM Plex Sans Variable', 'IBM Plex Sans', 'Segoe UI', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'SFMono-Regular', 'Consolas', 'monospace'],
+        report: ['Fraunces', 'Georgia', 'serif']
       },
       colors: {
         border: token('border'),
@@ -27,6 +29,7 @@ export default {
         warn: token('warn')
       },
       borderRadius: {
+        xl: 'calc(var(--radius) + 6px)',
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)'

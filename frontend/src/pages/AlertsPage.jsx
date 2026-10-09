@@ -24,7 +24,7 @@ export function AlertsPage() {
         const results = await Promise.allSettled(saved.map(async (portfolio) => ({ portfolio, valuation: await api.holdings.valuation(portfolio.id) })));
         if (!active) return;
         const ok = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
-        setAlerts(ok.flatMap(({ portfolio, valuation }) => (valuation.allocations || []).filter((a) => a.alert).map((a) => ({
+        const nextAlerts = ok.flatMap(({ portfolio, valuation }) => (valuation.allocations || []).filter((a) => a.alert).map((a) => ({
           portfolioId: portfolio.id,
           portfolio: portfolio.name,
           date: valuation.requestedDate,
@@ -32,8 +32,18 @@ export function AlertsPage() {
           targetPct: Number(a.targetPercentage),
           currentPct: Number(a.currentPercentage),
           driftPp: Number(a.driftPercentagePoints)
-        }))));
+        })));
+
+        setAlerts(nextAlerts);
         setSkipped(results.length - ok.length);
+
+        const nextCount = nextAlerts.length;
+        try {
+          localStorage.setItem('portfolio_alert_count', String(nextCount));
+        } catch {
+          // ignore localStorage quota issues
+        }
+        window.dispatchEvent(new CustomEvent('portfolio-alert-count', { detail: { count: nextCount } }));
       } catch (e) {
         if (active) setError(e.message || 'Unable to load alerts');
       } finally {

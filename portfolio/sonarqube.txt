@@ -1,4 +1,4 @@
-Set-Location "D:\reactjs\Portfolio-management-System\portfolio"
+Set-Location "C:\Project\Portfolio-management-System\portfolio"
 
 Remove-Item ".\target\sonar" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item ".\.scannerwork" -Recurse -Force -ErrorAction SilentlyContinue
@@ -12,8 +12,8 @@ if ([string]::IsNullOrWhiteSpace($env:SONAR_TOKEN)) {
 try {
     .\mvnw.cmd clean verify `
         org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar `
-        "-Dsonar.organization=kadhir812" `
-        "-Dsonar.projectKey=Kadhir812_Portfolio-management-System" `
+        "-Dsonar.organization=n4veenc" `
+        "-Dsonar.projectKey=N4VEENC_PMS" `
         "-Dsonar.host.url=https://sonarcloud.io" `
         "-Dsonar.token=$env:SONAR_TOKEN" `
         "-e"
@@ -22,7 +22,7 @@ finally {
     Remove-Item Env:SONAR_TOKEN -ErrorAction SilentlyContinue
 }
 
-
+7ce821915e55de40eb466bd870a8c64d6a9c5645
 
 //caching 
 Yes. **After coverage and SonarCloud findings are addressed, measure API performance before optimizing queries or adding caching.**

@@ -1,76 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Fraunces:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
 /* ------------------------------------------------------------------
-   Design tokens. Change a value here and the app (and the data grids,
-   via src/components/grid/gridTheme.js) follow.
+   Design tokens. Change a value here and the app follows.
+   This is the source-of-truth theme layer for the design system.
 ------------------------------------------------------------------- */
 @layer base {
-  /* Light: white page, black ink. */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 5%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 5%;
-    --primary: 252 85% 58%;
+    --background: 36 23% 92%;
+    --foreground: 24 26% 14%;
+    --card: 40 46% 97%;
+    --card-foreground: 24 26% 14%;
+    --primary: 149 25% 29%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 95%;
-    --secondary-foreground: 0 0% 5%;
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 40%;
-    --accent: 0 0% 94%;
-    --accent-foreground: 0 0% 5%;
-    --border: 0 0% 88%;
-    --input: 0 0% 80%;
-    --ring: 252 85% 58%;
-    /* gain / loss / warning */
-    --pos: 145 60% 27%;
-    --neg: 355 70% 42%;
-    --warn: 32 85% 36%;
-    /* asset class colours (largest class first) */
-    --chart-1: #7c5cff;
-    --chart-2: #a99bff;
-    --chart-3: #b4a8ff;
-    --chart-4: #5ab4ff;
-    --chart-5: #f5b84b;
-    --chart-6: #3ad1b5;
-    --chart-7: #ff7aa8;
-    --chart-8: #7d8aa5;
-    --stripe: rgba(255, 255, 255, 0.28);
-    --radius: 0.75rem;
+    --secondary: 30 66% 34%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 42 28% 88%;
+    --muted-foreground: 24 20% 30%;
+    --accent: 133 20% 89%;
+    --accent-foreground: 24 26% 14%;
+    --border: 34 25% 81%;
+    --input: 0 0% 100%;
+    --ring: 149 25% 29%;
+    --positive: 144 33% 32%;
+    --destructive: 6 45% 35%;
+    --pos: 144 33% 32%;
+    --neg: 6 45% 35%;
+    --warn: 30 66% 34%;
+    --chart-1: #2f5d46;
+    --chart-2: #7ba98b;
+    --chart-3: #d7e0d2;
+    --chart-4: #96591a;
+    --chart-5: #d9a05b;
+    --chart-6: #2f6b45;
+    --chart-7: #9b3b2e;
+    --chart-8: #e0d9cb;
+    --stripe: rgba(36, 31, 26, 0.06);
+    --radius: 0.625rem;
+    --radius-sm: calc(var(--radius) - 2px);
+    --radius-md: var(--radius);
+    --radius-lg: calc(var(--radius) + 2px);
+    --radius-xl: calc(var(--radius) + 6px);
+    --duration-fast: 150ms;
+    --duration-base: 200ms;
+    --duration-pulse: 280ms;
     color-scheme: light;
   }
 
-  /* Dark: black page, white ink. */
   .dark {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 5%;
-    --card-foreground: 0 0% 98%;
-    --primary: 252 96% 68%;
+    --background: 28 13% 11%;
+    --foreground: 36 31% 92%;
+    --card: 26 15% 12%;
+    --card-foreground: 36 31% 92%;
+    --primary: 145 23% 61%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 11%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 63%;
-    --accent: 0 0% 13%;
-    --accent-foreground: 0 0% 98%;
-    --border: 0 0% 16%;
-    --input: 0 0% 22%;
-    --ring: 252 96% 68%;
-    --pos: 150 68% 52%;
-    --neg: 352 88% 66%;
-    --warn: 38 92% 60%;
-    --chart-1: #7c5cff;
-    --chart-2: #a99bff;
-    --chart-3: #dcd7ff;
-    --chart-4: #5ab4ff;
-    --chart-5: #f5b84b;
-    --chart-6: #3ad1b5;
-    --chart-7: #ff7aa8;
-    --chart-8: #7d8aa5;
-    --stripe: rgba(255, 255, 255, 0.28);
+    --secondary: 31 67% 62%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 26 15% 15%;
+    --muted-foreground: 36 18% 75%;
+    --accent: 162 20% 18%;
+    --accent-foreground: 36 31% 92%;
+    --border: 27 15% 20%;
+    --input: 0 0% 100%;
+    --ring: 145 23% 61%;
+    --positive: 145 34% 64%;
+    --destructive: 9 65% 70%;
+    --pos: 145 34% 64%;
+    --neg: 9 65% 70%;
+    --warn: 31 67% 62%;
+    --chart-1: #7ba98b;
+    --chart-2: #d9a05b;
+    --chart-3: #22302a;
+    --chart-4: #7cc49a;
+    --chart-5: #e08d7e;
+    --chart-6: #332c24;
+    --chart-7: #f4efe6;
+    --chart-8: #1d1915;
+    --stripe: rgba(255, 255, 255, 0.04);
     color-scheme: dark;
+  }
+
+  .report-view {
+    --background: 0 0% 100%;
+    --foreground: 24 26% 14%;
+    --primary: 149 25% 29%;
+    --primary-foreground: 0 0% 100%;
+    --card: 0 0% 100%;
+    --card-foreground: 24 26% 14%;
+    --border: 30 20% 85%;
+    --muted: 0 0% 96%;
+    --accent: 133 20% 89%;
+    color-scheme: light;
   }
 
   * { border-color: hsl(var(--border)); box-sizing: border-box; }
@@ -78,14 +99,15 @@
   html { background: hsl(var(--background)); }
 
   body {
-    transition: background-color 150ms, color 150ms;
     margin: 0;
     min-height: 100vh;
     background: hsl(var(--background));
     color: hsl(var(--foreground));
-    font-family: Manrope, ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    font-family: 'IBM Plex Sans Variable', 'IBM Plex Sans', 'Segoe UI', sans-serif;
     font-variant-numeric: tabular-nums;
+    transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   button, input, select, textarea { font: inherit; }
@@ -96,6 +118,9 @@
     outline: 2px solid hsl(var(--ring) / 0.6);
     outline-offset: 1px;
   }
+
+  .font-mono, .font-mono * { font-family: 'IBM Plex Mono', 'SFMono-Regular', 'Consolas', monospace; }
+  .font-report, .font-report * { font-family: 'Fraunces', 'Times New Roman', serif; }
 }
 
 @layer components {
@@ -103,13 +128,21 @@
     @apply h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-primary disabled:cursor-not-allowed disabled:opacity-50;
   }
   .field-label { @apply mb-1.5 block text-xs font-medium text-muted-foreground; }
-  /* marks a grid cell the user can type into */
   .cell-input { background: hsl(var(--primary) / 0.10); box-shadow: inset 0 -2px 0 hsl(var(--primary) / 0.55); font-weight: 600; }
 }
 
-/* The striped segment in the "Total assets" distribution bar */
 .bar-striped {
   background-image: repeating-linear-gradient(90deg, var(--stripe) 0 1px, transparent 1px 4px);
+}
+
+@keyframes highlight-pulse {
+  0% { box-shadow: 0 0 0 rgba(47, 93, 70, 0); }
+  30% { box-shadow: 0 0 0 6px rgba(47, 93, 70, 0.12); }
+  100% { box-shadow: 0 0 0 rgba(47, 93, 70, 0); }
+}
+
+.highlight-update {
+  animation: highlight-pulse var(--duration-pulse) ease;
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -118,5 +151,10 @@
 ::-webkit-scrollbar-track { background: transparent; }
 
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

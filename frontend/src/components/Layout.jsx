@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { BellRing, BriefcaseBusiness, ChevronLeft, ChevronRight, Database, LayoutDashboard, Layers, LogOut, Scale, Wallet } from 'lucide-react';
 import { Brand } from './AuthShell';
@@ -27,6 +27,14 @@ function currentUserName() {
 export function Layout({ children }) {
   const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [alertCount, setAlertCount] = useState(() => {
+    try {
+      const value = Number(localStorage.getItem('portfolio_alert_count') || '0');
+      return Number.isFinite(value) ? value : 0;
+    } catch {
+      return 0;
+    }
+  });
   const isStandalonePage = pathname === '/securities';
   const portfolioId = pathname.match(/^\/portfolios\/(\d+)/)?.[1];
   const portfolioNav = portfolioId ? [
@@ -34,6 +42,26 @@ export function Layout({ children }) {
     { label: 'Holdings', to: `/portfolios/${portfolioId}/holdings`, icon: Wallet },
     { label: 'Rebalance', to: `/portfolios/${portfolioId}/rebalance`, icon: Scale }
   ] : [];
+
+  useEffect(() => {
+    const syncAlertCount = () => {
+      try {
+        const value = Number(localStorage.getItem('portfolio_alert_count') || '0');
+        setAlertCount(Number.isFinite(value) ? value : 0);
+      } catch {
+        setAlertCount(0);
+      }
+    };
+
+    syncAlertCount();
+    window.addEventListener('portfolio-alert-count', syncAlertCount);
+    window.addEventListener('storage', syncAlertCount);
+
+    return () => {
+      window.removeEventListener('portfolio-alert-count', syncAlertCount);
+      window.removeEventListener('storage', syncAlertCount);
+    };
+  }, []);
 
   const signOut = () => {
     localStorage.removeItem('portfolio_token');
@@ -72,7 +100,14 @@ export function Layout({ children }) {
                   !sidebarOpen && 'px-2'
                 )}
               >
-                <Icon className="h-4 w-4" />
+                <span className="relative flex items-center">
+                  <Icon className="h-4 w-4" />
+                  {label === 'Alerts' && alertCount > 0 && (
+                    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
+                      {alertCount > 99 ? '99+' : alertCount}
+                    </span>
+                  )}
+                </span>
                 {sidebarOpen && <span>{label}</span>}
               </NavLink>
             ))}
@@ -91,18 +126,25 @@ export function Layout({ children }) {
         {isStandalonePage ? (
           <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-background/85 px-4 backdrop-blur sm:px-8">
             <Brand />
-            <div className="flex items-center gap-2">
-              <ColorModeToggle />
-              <button type="button" onClick={signOut} title="Sign out" aria-label="Sign out" className="rounded-md p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground">
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
+            <button type="button" onClick={signOut} title="Sign out" aria-label="Sign out" className="rounded-md p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground">
+              <LogOut className="h-4 w-4" />
+            </button>
           </header>
         ) : (
           <>
             <header className="flex items-center gap-2 overflow-x-auto border-b border-border bg-card/60 px-3 py-2 lg:hidden">
               {[...mainNav, ...portfolioNav].map(({ label, to, icon: Icon, end }) => (
-                <NavLink key={to} to={to} end={end} className={linkClass}><Icon className="h-4 w-4" />{label}</NavLink>
+                <NavLink key={to} to={to} end={end} className={linkClass}>
+                  <span className="relative flex items-center">
+                    <Icon className="h-4 w-4" />
+                    {label === 'Alerts' && alertCount > 0 && (
+                      <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
+                        {alertCount > 99 ? '99+' : alertCount}
+                      </span>
+                    )}
+                  </span>
+                  {label}
+                </NavLink>
               ))}
               <span className="ml-auto flex items-center gap-1"><button type="button" onClick={signOut} className="rounded-md p-2 text-muted-foreground" aria-label="Sign out"><LogOut className="h-4 w-4" /></button></span>
             </header>

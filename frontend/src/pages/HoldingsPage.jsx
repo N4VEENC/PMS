@@ -5,7 +5,6 @@ import { useHoldingsData } from '../hooks/useHoldingsData';
 import { buildAllocationModel } from '../lib/allocation';
 import { number } from '../lib/format';
 import { AddSecuritiesGrid } from './holdings/AddSecuritiesGrid';
-import { CurrentHoldingsGrid } from './holdings/CurrentHoldingsGrid';
 import { HoldingsHeader } from './holdings/HoldingsHeader';
 import { HoldingsTiles } from './holdings/HoldingsTiles';
 import { TargetGrids } from './holdings/TargetGrids';
@@ -56,23 +55,29 @@ export function HoldingsPage() {
         <>
           <HoldingsTiles model={model} holdingCount={data.holdings.length} currency={currency} />
           <TargetGrids model={model} currency={currency} hasTheme={Boolean(data.theme)} />
-          <AddSecuritiesGrid
-            securities={data.eligible}
-            holdings={data.holdings}
-            model={model}
-            currency={currency}
-            busy={data.busy}
-            onAdd={add}
-          />
-          <CurrentHoldingsGrid
-            holdings={data.holdings}
-            model={model}
-            currency={currency}
-            busy={data.busy}
-            onChangeShares={changeShares}
-            onRemove={data.removeHolding}
-            onReject={reject}
-          />
+          <div className="space-y-3">
+            <AddSecuritiesGrid
+              securities={data.eligible}
+              holdings={[]}
+              model={model}
+              currency={currency}
+              busy={data.busy}
+              onAdd={add}
+              onReject={reject}
+            />
+
+            <AddSecuritiesGrid
+              securities={[]}
+              holdings={data.holdings}
+              model={model}
+              currency={currency}
+              busy={data.busy}
+              onChangeShares={changeShares}
+              onRemove={data.removeHolding}
+              onReject={reject}
+              isPortfolioHoldings
+            />
+          </div>
         </>
       )}
     </>

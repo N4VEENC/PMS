@@ -20,7 +20,7 @@ export function ColorModeProvider({ children }) {
     try { localStorage.setItem(STORAGE_KEY, mode); } catch { /* private mode: just don't remember it */ }
   }, [mode]);
 
-  const toggle = useCallback(() => setMode('light'), []);
+  const toggle = useCallback(() => setMode((current) => (current === 'dark' ? 'light' : 'dark')), []);
   const value = useMemo(() => ({ mode, toggle }), [mode, toggle]);
   return <ColorModeContext.Provider value={value}>{children}</ColorModeContext.Provider>;
 }
