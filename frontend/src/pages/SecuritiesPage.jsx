@@ -53,12 +53,24 @@ export function SecuritiesPage() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [master, setMaster] = useState([]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api.securities.list().then(setMaster).catch((e) => setError(e.message || 'Unable to load securities')).finally(() => setLoading(false));
-  }, []);
+    setLoading(true);
+    api.securities.list({ page, pageSize })
+      .then((pageResponse) => {
+        setMaster(pageResponse.content || []);
+        setTotalElements(pageResponse.totalElements || 0);
+        setTotalPages(pageResponse.totalPages || 0);
+      })
+      .catch((e) => setError(e.message || 'Unable to load securities'))
+      .finally(() => setLoading(false));
+  }, [page, pageSize]);
 
   const exchanges = useMemo(() => [...new Set(master.map((security) => security.exchange).filter(Boolean))].sort(), [master]);
   const sectors = useMemo(() => [...new Set(master.map((security) => security.sector).filter(Boolean))].sort(), [master]);
@@ -83,6 +95,33 @@ export function SecuritiesPage() {
     });
   }, [master, masterExchange, masterIsin, masterSector, masterIndustry]);
   const idLabel = isLse(exchange) ? 'CUPID' : 'ISIN';
+  const firstRow = totalElements === 0 ? 0 : page * pageSize + 1;
+  const lastRow = Math.min((page + 1) * pageSize, totalElements);
+  const pageButtons = useMemo(() => {
+    const totalPageCount = Math.max(totalPages, 1);
+    if (totalPageCount <= 7) {
+      return Array.from({ length: totalPageCount }, (_, index) => index + 1);
+    }
+
+    const pages = new Set([1, page + 1, totalPageCount]);
+    for (let candidate = page - 2; candidate <= page + 2; candidate += 1) {
+      if (candidate > 1 && candidate < totalPageCount) {
+        pages.add(candidate);
+      }
+    }
+
+    const ordered = [...pages].sort((a, b) => a - b);
+    const result = [];
+    let previous = 0;
+    ordered.forEach((pageNumber) => {
+      if (previous !== 0 && pageNumber > previous + 1) {
+        result.push('ellipsis');
+      }
+      result.push(pageNumber);
+      previous = pageNumber;
+    });
+    return result;
+  }, [page, totalPages]);
 
   const search = async (event) => {
     event.preventDefault();
@@ -177,7 +216,7 @@ export function SecuritiesPage() {
       <Notice tone="error">{error}</Notice>
       <GridCard
         title="Securities master"
-        subtitle={loading ? 'Loading…' : `Showing ${filteredMaster.length} of ${master.length} securities. Scroll sideways for sector, industry and data quality.`}
+        subtitle={loading ? 'Loading…' : totalElements > 0 ? `Showing ${firstRow}-${lastRow} of ${totalElements} securities. Scroll sideways for sector, industry and data quality.` : 'No securities in the master yet.'}
         toolbar={(
           <>
             <label className="w-44">
@@ -220,6 +259,59 @@ export function SecuritiesPage() {
         tooltipShowDelay={300}
         emptyMessage={master.length > 0 ? 'No securities match the selected filters.' : 'No securities in the master yet.'}
       />
+
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={page === 0 || loading}
+            onClick={() => setPage((current) => Math.max(current - 1, 0))}
+          >
+            {'< Back'}
+          </button>
+          {pageButtons.map((buttonNumber, index) => {
+            if (buttonNumber === 'ellipsis') {
+              return <span key={`ellipsis-${index}`} className="px-2 text-sm text-muted-foreground">...</span>;
+            }
+
+            const isCurrent = buttonNumber === page + 1;
+            return (
+              <button
+                key={buttonNumber}
+                type="button"
+                onClick={() => setPage(buttonNumber - 1)}
+                className={`h-10 min-w-10 rounded-md border px-3 text-sm transition ${isCurrent ? 'border-foreground bg-foreground text-background' : 'border-input bg-background text-foreground hover:bg-accent'}`}
+                disabled={loading}
+              >
+                {buttonNumber}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={page >= Math.max(totalPages - 1, 0) || loading}
+            onClick={() => setPage((current) => Math.min(current + 1, Math.max(totalPages - 1, 0)))}
+          >
+            {'Next >'}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">{totalElements === 0 ? '0-0 of 0' : `${firstRow}-${lastRow} of ${totalElements}`}</span>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Result per page</span>
+            <select
+              className="field h-9 w-20"
+              value={pageSize}
+              onChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }}
+            >
+              {[25, 50, 100, 200].map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+        </div>
+      </div>
     </>
   );
 }

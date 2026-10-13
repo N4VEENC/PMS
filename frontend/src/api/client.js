@@ -13,11 +13,24 @@ client.interceptors.request.use((config) => {
 	if (token) {
 		config.headers.Authorization = `Bearer ${token}`;
 	}
+	console.log('[API] request start', {
+		method: config.method?.toUpperCase(),
+		url: config.url,
+		params: config.params,
+		hasToken: Boolean(token)
+	});
 	return config;
 });
 
 client.interceptors.response.use(
-	(response) => response,
+	(response) => {
+		console.log('[API] request success', {
+			url: response.config?.url,
+			status: response.status,
+			itemCount: Array.isArray(response.data) ? response.data.length : 'n/a'
+		});
+		return response;
+	},
 	(error) => {
 		if (error.response?.status === 401) {
 			localStorage.removeItem('portfolio_token');
@@ -69,8 +82,9 @@ export const api = {
 		list: async () => (await client.get('/asset-classes')).data
 	},
 	securities: {
-		list: async () => (await client.get('/securities')).data,
-		search: async (params) => (await client.get('/securities/search', { params })).data
+		list: async ({ page = 0, pageSize = 50 } = {}) => (await client.get('/securities', { params: { page, pageSize } })).data,
+		search: async (params) => (await client.get('/securities/search', { params })).data,
+		match: async (query) => (await client.get('/securities/match', { params: { query } })).data
 	},
 	holdings: {
 		list: async (portfolioId) => (await client.get(`/portfolios/${portfolioId}/holdings`)).data,

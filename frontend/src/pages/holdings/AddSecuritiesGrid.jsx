@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Plus, Search, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { GridCard } from '../../components/grid/GridCard';
 import {
   SecurityCell, actionsCol, assetClassCol, categoryCol, moneyCol, numCol, sharesCol
@@ -20,9 +20,31 @@ const toNumber = (value) => {
  * One searchable holdings table: current holdings stay visible, and eligible securities only appear
  * after a search query is entered. This prevents the whole security master from being listed by default.
  */
-export function AddSecuritiesGrid({ securities, holdings, model, currency, busy, onAdd, onChangeShares, onRemove, onReject, isPortfolioHoldings = false }) {
+export function AddSecuritiesGrid({ securities, holdings, model, currency, busy, eligibleLoading = false, onAdd, onChangeShares, onRemove, onReject, onSearch, isPortfolioHoldings = false }) {
   const [drafts, setDrafts] = useState({});
   const [query, setQuery] = useState('');
+  const lastSubmittedQueryRef = useRef('');
+
+  useEffect(() => {
+    if (isPortfolioHoldings) return;
+
+    const trimmed = query.trim();
+    if (trimmed === lastSubmittedQueryRef.current) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      const nextQuery = query.trim();
+      lastSubmittedQueryRef.current = nextQuery;
+      if (nextQuery) {
+        onSearch?.(nextQuery);
+      } else {
+        onSearch?.('');
+      }
+    }, 250);
+
+    return () => clearTimeout(timeoutId);
+  }, [isPortfolioHoldings, onSearch, query]);
 
   const heldBySecurity = useMemo(
     () => Object.fromEntries(holdings.map((holding) => [holding.securityId, holding])),
@@ -218,12 +240,19 @@ export function AddSecuritiesGrid({ securities, holdings, model, currency, busy,
         <div className="ml-auto flex w-full justify-end">
           <label className="relative block w-full min-w-[320px] max-w-[620px]">
             <span className="sr-only">Search securities</span>
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            {eligibleLoading ? (
+              <Loader2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            ) : (
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            )}
             <input
               className="field h-9 w-full pl-9"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by symbol, ISIN, name, exchange…"
+              disabled={busy}
+              onChange={(event) => {
+                setQuery(event.target.value);
+              }}
+              placeholder={eligibleLoading ? 'Loading eligible securities…' : 'Search by symbol, ISIN, name, exchange…'}
             />
           </label>
         </div>

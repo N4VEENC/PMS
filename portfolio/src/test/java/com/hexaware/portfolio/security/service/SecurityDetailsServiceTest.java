@@ -12,16 +12,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.hexaware.portfolio.security.entity.SecurityDetails;
+import com.hexaware.portfolio.security.repository.DailyPriceRepository;
 import com.hexaware.portfolio.security.repository.SecurityDetailsRepository;
 
 class SecurityDetailsServiceTest {
     private SecurityDetailsRepository repository;
+    private DailyPriceRepository dailyPriceRepository;
     private SecurityDetailsService service;
 
     @BeforeEach
     void setUp() {
         repository = mock(SecurityDetailsRepository.class);
-        service = new SecurityDetailsService(repository);
+        dailyPriceRepository = mock(DailyPriceRepository.class);
+        service = new SecurityDetailsService(repository, dailyPriceRepository);
     }
 
     @Test

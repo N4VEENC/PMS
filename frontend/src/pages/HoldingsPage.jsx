@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Notice } from '../components/Notice';
 import { useHoldingsData } from '../hooks/useHoldingsData';
@@ -27,6 +27,13 @@ export function HoldingsPage() {
     if (added) setMessage(`Added ${number(shares, 4)} shares of ${security.symbol}.`);
     return added;
   };
+
+  const fetchEligibleForSearch = useCallback(async (nextQuery) => {
+    const trimmed = nextQuery?.trim() || '';
+
+    console.log('[HoldingsPage] searching security master for matches', { trimmed });
+    await data.searchEligibleSecurities(trimmed);
+  }, [data.searchEligibleSecurities]);
 
   const changeShares = async (holdingId, shares) => {
     setMessage('');
@@ -62,8 +69,10 @@ export function HoldingsPage() {
               model={model}
               currency={currency}
               busy={data.busy}
+              eligibleLoading={data.eligibleLoading}
               onAdd={add}
               onReject={reject}
+              onSearch={fetchEligibleForSearch}
             />
 
             <AddSecuritiesGrid

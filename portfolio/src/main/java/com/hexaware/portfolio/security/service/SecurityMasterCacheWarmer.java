@@ -16,6 +16,6 @@ public class SecurityMasterCacheWarmer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        securityMasterController.list();
+        securityMasterController.list(0, 50);
     }
 }

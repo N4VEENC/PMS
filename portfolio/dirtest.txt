@@ -1,0 +1,25 @@
+ Volume in drive C has no label.
+ Volume Serial Number is 68F4-3A68
+
+ Directory of C:\Project\Portfolio-management-System\portfolio
+
+13-10-2026  10:52 AM    <DIR>          .
+07-10-2026  09:59 AM    <DIR>          ..
+07-10-2026  09:59 AM                40 .gitattributes
+07-10-2026  09:59 AM               427 .gitignore
+07-10-2026  09:59 AM    <DIR>          .mvn
+13-10-2026  10:48 AM    <DIR>          .vscode
+07-10-2026  09:59 AM                 0 backend-run.err
+07-10-2026  09:59 AM         2,036,265 backend-run.log
+07-10-2026  09:59 AM    <DIR>          bin
+13-10-2026  10:52 AM                 0 dirtest.txt
+07-10-2026  09:59 AM            11,790 mvnw
+07-10-2026  09:59 AM             8,481 mvnw.cmd
+07-10-2026  09:59 AM             4,907 pom.xml
+13-10-2026  10:50 AM    <DIR>          scripts
+13-10-2026  10:52 AM               376 seed_check.txt
+07-10-2026  12:22 PM             3,854 sonarqube.txt
+07-10-2026  09:59 AM    <DIR>          src
+07-10-2026  12:39 PM    <DIR>          target
+              10 File(s)      2,066,140 bytes
+               8 Dir(s)  424,352,821,248 bytes free

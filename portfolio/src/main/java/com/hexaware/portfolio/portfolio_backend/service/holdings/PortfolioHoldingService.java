@@ -4,6 +4,8 @@ import java.math.*;
 import java.time.*;
 import java.util.*;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,32 +66,50 @@ public class PortfolioHoldingService {
         return getEligibleSecurities(portfolioId, null);
     }
 
+    @Cacheable(cacheNames = "eligible-securities",
+            key = "#portfolioId + ':' + (#asOfDate == null ? 'latest' : #asOfDate.toString())")
     public List<EligibleSecurityResponse> getEligibleSecurities(Long portfolioId, LocalDate asOfDate) {
         Portfolio portfolio = ownPortfolio(portfolioId);
         Set<AssetClass> allowedAssetClasses = allocationService.allowedAssetClasses(portfolio);
-        return securities.findAll()
-            .stream()
-            .filter(security -> !isExcludedExchange(security.getExchange()))
-            .map(s -> {
-            AssetClass assetClass = securityService.assetClass(s.getAssetType());
-            if (!allowedAssetClasses.isEmpty() && !allowedAssetClasses.contains(assetClass)) return null;
+        List<AssetType> allowedAssetTypes = allowedAssetClasses.isEmpty() ? List.of()
+                : allowedAssetClasses.stream().map(this::toAssetType).filter(Objects::nonNull).distinct().toList();
+        List<SecurityDetails> candidateSecurities = allowedAssetTypes.isEmpty()
+                ? securities.findAll()
+                : securities.findAllByAssetTypeIn(allowedAssetTypes);
 
-            Optional<DailyPrice> p = asOfDate == null ? Optional.ofNullable(securityService.latestPrice(s.getSecurityId())) : prices.findTopBySecurityIdAndTradeDateLessThanEqualOrderByTradeDateDesc(s.getSecurityId(), asOfDate);
-            return p.map(price -> new EligibleSecurityResponse(
-                s.getSecurityId(), 
-                s.getIsin(), 
-                s.getSymbol(), 
-                s.getDescription(), 
-                assetClass, 
-                s.getEquityCategory(), 
-                securityService.priceValue(price), 
-                price.getTradeDate()))
-                
-                .orElse(null);
-        }).filter(Objects::nonNull).toList();
+        Map<Long, DailyPrice> latestPricesBySecurity = loadLatestPricesBySecurityId(
+                candidateSecurities.stream().map(SecurityDetails::getSecurityId).filter(Objects::nonNull).toList(),
+                asOfDate);
+
+        return candidateSecurities.stream()
+                .filter(security -> !isExcludedExchange(security.getExchange()))
+                .map(security -> {
+                    AssetClass assetClass = securityService.assetClass(security.getAssetType());
+                    if (!allowedAssetClasses.isEmpty() && !allowedAssetClasses.contains(assetClass)) {
+                        return null;
+                    }
+
+                    DailyPrice price = latestPricesBySecurity.get(security.getSecurityId());
+                    if (price == null) {
+                        return null;
+                    }
+
+                    return new EligibleSecurityResponse(
+                            security.getSecurityId(),
+                            security.getIsin(),
+                            security.getSymbol(),
+                            security.getDescription(),
+                            assetClass,
+                            security.getEquityCategory(),
+                            securityService.priceValue(price),
+                            price.getTradeDate());
+                })
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "eligible-securities", allEntries = true)
     public PortfolioHolding addSecurity(Long portfolioId, AddSecurityRequest request) {
         Portfolio p = ownPortfolio(portfolioId);
         ensurePortfolioOpen(p);
@@ -138,6 +158,7 @@ public class PortfolioHoldingService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "eligible-securities", allEntries = true)
     public Portfolio saveHoldings(Long portfolioId) {
         Portfolio p = ownPortfolio(portfolioId);
         ensurePortfolioOpen(p);
@@ -156,6 +177,7 @@ public class PortfolioHoldingService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "eligible-securities", allEntries = true)
     public PortfolioHolding update(Long portfolioId, Long holdingId, UpdateHoldingRequest request) {
         PortfolioHolding row = getById(portfolioId, holdingId);
         if (request == null || request.shares() == null || request.shares().signum() <= 0) throw new PortfolioValidationException("Shares must be greater than zero");
@@ -174,6 +196,7 @@ public class PortfolioHoldingService {
         return holdings.save(row);
     }
     @Transactional
+    @CacheEvict(cacheNames = "eligible-securities", allEntries = true)
     public void delete(Long portfolioId, Long holdingId) {
         PortfolioHolding row = getById(portfolioId, holdingId);
         Portfolio portfolio = ownPortfolio(portfolioId);
@@ -475,6 +498,40 @@ public class PortfolioHoldingService {
     }
 
     private record RebalanceTrade(SecurityDetails security, AssetClass assetClass, BigDecimal signedShares, BigDecimal unitPrice) {}
+
+    private Map<Long, DailyPrice> loadLatestPricesBySecurityId(Collection<Long> securityIds, LocalDate asOfDate) {
+        if (securityIds == null || securityIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, DailyPrice> latestBySecurityId = new HashMap<>();
+        for (DailyPrice price : prices.findBySecurityIdInOrderBySecurityIdAscTradeDateDesc(securityIds)) {
+            if (price == null) {
+                continue;
+            }
+            if (asOfDate != null && price.getTradeDate() != null && price.getTradeDate().isAfter(asOfDate)) {
+                continue;
+            }
+            latestBySecurityId.putIfAbsent(price.getSecurityId(), price);
+        }
+        return latestBySecurityId;
+    }
+
+    private AssetType toAssetType(AssetClass assetClass) {
+        if (assetClass == null) {
+            return null;
+        }
+        return switch (assetClass) {
+            case STOCKS -> AssetType.EQUITY;
+            case MUTUAL_FUNDS -> AssetType.MUTUAL;
+            case COMMODITIES -> AssetType.COMMODITY;
+            case BONDS -> AssetType.BOND;
+            case CRYPTO -> AssetType.CRYPTO;
+            case REITS -> AssetType.REIT;
+            case ETFS -> AssetType.ETF;
+            case CASH -> AssetType.CASH;
+        };
+    }
 
     private boolean isExcludedExchange(String exchange) {
         return exchange != null && (exchange.equalsIgnoreCase("LSE") || exchange.equalsIgnoreCase("NASDAQ"));

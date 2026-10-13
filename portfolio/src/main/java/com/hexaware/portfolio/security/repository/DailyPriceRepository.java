@@ -1,6 +1,7 @@
 package com.hexaware.portfolio.security.repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,6 +13,10 @@ import com.hexaware.portfolio.security.entity.DailyPrice;
 public interface DailyPriceRepository extends JpaRepository<DailyPrice, Long> {
 
     List<DailyPrice> findBySecurityId(Long securityId);
+
+    List<DailyPrice> findBySecurityIdIn(Collection<Long> securityIds);
+
+    List<DailyPrice> findBySecurityIdInOrderBySecurityIdAscTradeDateDesc(Collection<Long> securityIds);
 
     List<DailyPrice> findBySecurityIdAndTradeDateBetween(Long securityId, LocalDate from, LocalDate to);
 
