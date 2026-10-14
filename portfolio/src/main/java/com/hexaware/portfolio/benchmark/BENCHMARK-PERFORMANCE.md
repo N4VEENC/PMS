@@ -39,12 +39,9 @@ The repository contains generated demo histories, including
 [`portfolio_all_assets_2_years_volatile.sql`](../../resources/portfolio_all_assets_2_years_volatile.sql).
 These are synthetic data, not verified live market history.
 
-For demo portfolio 30, selected held-security prices for March, May, August,
-and September 2026 were adjusted by
-[`portfolio_chart_mock_price_movements.sql`](../../resources/db/portfolio_chart_mock_price_movements.sql).
-That script saves original values in a baseline table and reapplies modest
-monthly multipliers from those original values, so rerunning it does not
-compound the price changes. It does not alter benchmark prices.
+The optional mock-price script has been removed. To remove its former baseline
+table from an existing database, run
+[`drop_portfolio_chart_mock_price_baseline.sql`](../../resources/db/drop_portfolio_chart_mock_price_baseline.sql).
 
 ## Chart loading flow
 

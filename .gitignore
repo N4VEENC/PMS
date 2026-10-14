@@ -1,0 +1,42 @@
+# Java and Maven build output
+**/target/
+**/out/
+*.class
+*.jar
+*.war
+*.ear
+
+# JavaScript dependencies and build output
+**/node_modules/
+**/dist/
+**/.vite/
+**/coverage/
+
+# Load-test binary and generated reports
+loadtest/.tools/
+loadtest/loadtest-report.html
+loadtest/loadtest-report.json
+loadtest/loadtest-report.txt
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Logs and runtime output
+*.log
+*.err
+portfolio/backend-run.log
+portfolio/backend-run.err
+
+# IDE and editor state
+.idea/
+*.iml
+.vs/
+.vscode/
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,14 @@
+{
+  "name": "portfolio-api-loadtest",
+  "private": true,
+  "version": "1.0.0",
+  "description": "k6 load tests for the portfolio management API",
+  "scripts": {
+    "install:k6": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\install-k6.ps1",
+    "k6:version": ".\\.tools\\k6\\k6.exe version",
+    "k6.cmd": ".\\.tools\\k6\\k6.exe run loadtest.js"
+  },
+  "dependencies": {
+    "mysql": "^2.18.1"
+  }
+}

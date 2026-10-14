@@ -1,25 +1,22 @@
-Set-Location "D:\reactjs\Portfolio-management-System\portfolio"
+Set-Location "C:\portmanage\Portfolio-management-System\portfolio"
 
-Remove-Item ".\target\sonar" -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item ".\.scannerwork" -Recurse -Force -ErrorAction SilentlyContinue
-
-$env:SONAR_TOKEN = Read-Host "Paste your new SonarCloud token"
-
-if ([string]::IsNullOrWhiteSpace($env:SONAR_TOKEN)) {
-    throw "SONAR_TOKEN is empty."
-}
+$secureToken = Read-Host "Enter your SonarCloud token" -AsSecureString
+$env:SONAR_TOKEN = [System.Net.NetworkCredential]::new("", $secureToken).Password
 
 try {
     .\mvnw.cmd clean verify `
         org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar `
         "-Dsonar.organization=kadhir812" `
         "-Dsonar.projectKey=Kadhir812_Portfolio-management-System" `
-        "-Dsonar.host.url=https://sonarcloud.io" `
-        "-Dsonar.token=$env:SONAR_TOKEN" `
-        "-e"
+        "-Dsonar.host.url=https://sonarcloud.io"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Maven/SonarCloud analysis failed. Check the output above."
+    }
 }
 finally {
     Remove-Item Env:SONAR_TOKEN -ErrorAction SilentlyContinue
+    Remove-Variable secureToken -ErrorAction SilentlyContinue
 }
 
 

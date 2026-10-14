@@ -5,12 +5,14 @@ import java.time.Instant;
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DataAccessException;
+import org.springframework.web.server.ResponseStatusException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,14 +70,29 @@ public class GlobalExceptionHandler {
                 "The operation conflicts with existing related records or database constraints", request);
     }
 
-        @ExceptionHandler(DataAccessException.class)
-        public ResponseEntity<ApiErrorResponse> handleDatabaseFailure(
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiErrorResponse> handleResponseStatus(
+            ResponseStatusException exception,
+            HttpServletRequest request) {
+        HttpStatusCode status = exception.getStatusCode();
+        HttpStatus knownStatus = HttpStatus.resolve(status.value());
+        ApiErrorResponse error = new ApiErrorResponse(
+                Instant.now(),
+                status.value(),
+                knownStatus == null ? "Error" : knownStatus.getReasonPhrase(),
+                exception.getReason() == null ? "Request failed" : exception.getReason(),
+                request.getRequestURI());
+        return ResponseEntity.status(status).body(error);
+    }
+
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<ApiErrorResponse> handleDatabaseFailure(
             DataAccessException exception,
             HttpServletRequest request) {
         logger.error("Database failure while processing {} {}", request.getMethod(), request.getRequestURI(), exception);
         return buildError(HttpStatus.SERVICE_UNAVAILABLE,
             "Database request failed; check database availability and connection settings", request);
-        }
+    }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleUnexpected(

@@ -11,6 +11,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.hexaware.portfolio.benchmark.dto.BenchmarkComparisonResponse;
 import com.hexaware.portfolio.benchmark.dto.BenchmarkResponse;
+import com.hexaware.portfolio.benchmark.entity.BenchmarkIndex;
 import com.hexaware.portfolio.benchmark.repository.BenchmarkDailyPriceRepository;
 import com.hexaware.portfolio.benchmark.repository.BenchmarkIndexRepository;
 
@@ -29,12 +30,12 @@ public class BenchmarkService {
                 .toList();
     }
 
-    @Cacheable(cacheNames = "benchmark-detail", key = "#indexCode == null ? 'null' : #indexCode.toUpperCase()")
+    @Cacheable(cacheNames = "benchmark-detail", key = "#indexCode == null ? 'null' : #indexCode.trim().toUpperCase(T(java.util.Locale).ROOT)")
     public BenchmarkResponse getBenchmark(String indexCode) {
         return BenchmarkResponse.from(findBenchmark(indexCode));
     }
 
-    @Cacheable(cacheNames = "benchmark-prices", key = "(#indexCode == null ? 'null' : #indexCode.toUpperCase()) + ':' + #from + ':' + #to")
+    @Cacheable(cacheNames = "benchmark-prices", key = "(#indexCode == null ? 'null' : #indexCode.trim().toUpperCase(T(java.util.Locale).ROOT)) + ':' + #from + ':' + #to")
     public BenchmarkComparisonResponse getPrices(String indexCode, LocalDate from, LocalDate to) {
         if (from == null || to == null || from.isAfter(to)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The from date must be on or before the to date");
@@ -45,7 +46,7 @@ public class BenchmarkService {
         return BenchmarkComparisonResponse.from(index, from, to, prices);
     }
 
-    private com.hexaware.portfolio.benchmark.entity.BenchmarkIndex findBenchmark(String indexCode) {
+    private BenchmarkIndex findBenchmark(String indexCode) {
         if (indexCode == null || indexCode.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Benchmark index code is required");
         }

@@ -27,6 +27,7 @@ function currentUserName() {
 export function Layout({ children }) {
   const { pathname } = useLocation();
   const isStandalonePage = pathname === '/securities';
+  const isDashboardPage = /^\/portfolios\/\d+$/.test(pathname);
   // Inside a specific portfolio, show its own shortcuts
   const portfolioId = pathname.match(/^\/portfolios\/(\d+)/)?.[1];
   const portfolioNav = portfolioId ? [
@@ -68,7 +69,7 @@ export function Layout({ children }) {
         </div>
       </aside>}
 
-      <div className="min-w-0 flex-1">
+      <div className={cn('min-w-0 flex-1', isDashboardPage && 'bg-[#fff8e7] dark:bg-background')}>
         {isStandalonePage ? (
           <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-background/85 px-4 backdrop-blur sm:px-8">
             <Brand />

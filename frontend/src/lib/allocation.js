@@ -1,14 +1,10 @@
-// Holdings maths: how much of each theme target is used, and how much room is left to add.
-// These mirror the guardrails enforced by the backend (HoldingAllocationService), including its ₹1 tolerance,
-// so the UI can tell the user up front what the server will accept.
+// Match backend allocation guardrails so the UI shows the room the server will accept.
 
-export const TOLERANCE = 1;
-
-const sum = (rows, pick) => rows.reduce((total, row) => total + Number(pick(row) || 0), 0);
+const TOLERANCE = 1;
 
 export function buildAllocationModel({ portfolio, theme, holdings = [] }) {
   const amount = Number(portfolio?.amount || 0);
-  const invested = sum(holdings, (holding) => holding.value);
+  const invested = holdings.reduce((total, holding) => total + Number(holding.value || 0), 0);
   const availableCash = Math.max(amount - invested, 0);
 
   const valueByClass = {};
@@ -31,9 +27,7 @@ export function buildAllocationModel({ portfolio, theme, holdings = [] }) {
       currentValue,
       currentPct,
       gapPct: currentPct - targetPct,
-      // what is still unallocated against the target
       leftValue: Math.max(targetValue - currentValue, 0),
-      // what the backend will accept (target plus tolerance); cash is never bought directly
       roomValue: isCash ? 0 : Math.max(targetValue + TOLERANCE - currentValue, 0)
     };
   };
@@ -41,12 +35,19 @@ export function buildAllocationModel({ portfolio, theme, holdings = [] }) {
   const classRows = (theme?.allocations || []).map((allocation) => {
     const isCash = allocation.assetClass === 'CASH';
     const current = isCash ? availableCash + (valueByClass.CASH || 0) : valueByClass[allocation.assetClass] || 0;
-    return { ...toRow(allocation.assetClass, Number(allocation.percentage), current, isCash), assetClass: allocation.assetClass };
+    return {
+      ...toRow(allocation.assetClass, Number(allocation.percentage), current, isCash),
+      assetClass: allocation.assetClass
+    };
   });
 
   const stocksTargetPct = Number(theme?.allocations?.find((allocation) => allocation.assetClass === 'STOCKS')?.percentage || 0);
   const categoryRows = (theme?.equityAllocations || []).map((allocation) => ({
-    ...toRow(allocation.equityCategory, stocksTargetPct * Number(allocation.percentage) / 100, valueByCategory[allocation.equityCategory] || 0),
+    ...toRow(
+      allocation.equityCategory,
+      stocksTargetPct * Number(allocation.percentage) / 100,
+      valueByCategory[allocation.equityCategory] || 0
+    ),
     equityCategory: allocation.equityCategory,
     equityWeightPct: Number(allocation.percentage)
   }));
@@ -54,10 +55,7 @@ export function buildAllocationModel({ portfolio, theme, holdings = [] }) {
   return { amount, invested, availableCash, classRows, categoryRows };
 }
 
-/**
- * The room left for one security = the smallest of: cash on hand, its asset-class room, and (for equity)
- * its cap-category room. `limitedBy` says which one is the bottleneck so the UI can explain it.
- */
+/** Return the tightest cash, asset-class, or equity-category limit for a security. */
 export function roomFor(model, { assetClass, equityCategory }) {
   const limits = [{ by: 'cash', value: model.availableCash }];
 

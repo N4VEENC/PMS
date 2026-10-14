@@ -3,7 +3,7 @@ import { formatAssetClass } from '../../lib/assetClassUtils';
 import { colorFor } from '../../lib/dashboard';
 import { cn } from '../../lib/utils';
 
-// ---------- column builders: keep every grid's column list short and consistent ----------
+const isBlank = (value) => value == null || value === '';
 
 export const textCol = (field, headerName, extra = {}) => ({
   field,
@@ -25,12 +25,12 @@ export const numCol = (field, headerName, extra = {}) => ({
 
 export const moneyCol = (field, headerName, currency, extra = {}) => numCol(field, headerName, {
   minWidth: 140,
-  valueFormatter: ({ value }) => (value == null || value === '' ? '—' : money(value, currency)),
+  valueFormatter: ({ value }) => (isBlank(value) ? '—' : money(value, currency)),
   ...extra
 });
 
 export const pctCol = (field, headerName, extra = {}) => numCol(field, headerName, {
-  valueFormatter: ({ value }) => (value == null || value === '' ? '—' : pct(value)),
+  valueFormatter: ({ value }) => (isBlank(value) ? '—' : pct(value)),
   ...extra
 });
 
@@ -68,7 +68,7 @@ export const categoryCol = (field = 'equityCategory', headerName = 'Category', e
 });
 
 export const sharesCol = (field, headerName, extra = {}) => numCol(field, headerName, {
-  valueFormatter: ({ value }) => (value == null || value === '' ? '—' : number(value, 4)),
+  valueFormatter: ({ value }) => (isBlank(value) ? '—' : number(value, 4)),
   ...extra
 });
 
@@ -88,8 +88,6 @@ export const actionsCol = (cellRenderer, width = 120, extra = {}) => ({
   cellClass: 'flex items-center justify-end',
   ...extra
 });
-
-// ---------- cell renderers ----------
 
 export function AssetClassCell({ value }) {
   if (!value) return '—';
@@ -124,13 +122,18 @@ const PILL_TONES = {
 
 export function Pill({ tone = 'neutral', children }) {
   return (
-    <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold', PILL_TONES[tone])}>
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold',
+        PILL_TONES[tone]
+      )}
+    >
       {children}
     </span>
   );
 }
 
-/** Thin bar showing how much of a target is used. value and max are in the same unit. */
+/** Shows the proportion of a target used; value and max must use the same units. */
 export function ProgressCell({ value, max, color = '#7c5cff' }) {
   const ratio = max > 0 ? Math.min(value / max, 1.2) : 0;
   const over = ratio > 1.0005;

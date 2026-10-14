@@ -19,6 +19,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.UniqueConstraint;
 import org.hibernate.annotations.Check;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -31,6 +32,7 @@ import lombok.NoArgsConstructor;
 @Data 
 @Builder 
 @NoArgsConstructor
+@AllArgsConstructor
 public class ThemeAllocation {
 
     @Id

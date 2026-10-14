@@ -37,10 +37,6 @@ public class AuthService {
         if (userRepository.existsByUsername(username)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username is already registered");
         }
-        if (userRepository.count() > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only one application user is supported");
-        }
-
         AppUser user = AppUser.builder()
                 .email(email)
                 .username(username)

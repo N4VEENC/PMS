@@ -13,7 +13,6 @@ const defaultColDef = {
   resizable: true,
   filter: true,
   flex: 1,
-  minWidth: 120,
   suppressMovable: true,
   // We format values ourselves. Inferring a type from the first row rejects typed input when that row is empty.
   cellDataType: false,
@@ -69,7 +68,6 @@ export function DataGrid({
         rowHeight={rowHeight}
         loading={loading}
         stopEditingWhenCellsLoseFocus
-        suppressCellFocus={false}
         noRowsOverlayComponent={NoRows}
         noRowsOverlayComponentParams={{ message: emptyMessage }}
         {...gridProps}
