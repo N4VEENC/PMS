@@ -6,15 +6,16 @@ import java.util.Map;
 import java.util.Optional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.hexaware.portfolio.security.dto.SecuritySearchResponse;
 import com.hexaware.portfolio.security.entity.DailyPrice;
+import com.hexaware.portfolio.security.entity.AssetType;
 import com.hexaware.portfolio.security.entity.SecurityDetails;
 import com.hexaware.portfolio.security.repository.DailyPriceRepository;
 import com.hexaware.portfolio.security.repository.SecurityDetailsRepository;
@@ -56,13 +57,27 @@ public class SecurityDetailsService {
         return repo.findAll(pageable);
     }
 
-    public List<SecuritySearchResponse> searchMatching(String query) {
+    public List<SecuritySearchResponse> searchMatching(String query, LocalDate asOfDate) {
         String clean = query == null ? "" : query.trim();
         if (clean.isEmpty()) {
             return List.of();
         }
 
-        List<SecurityDetails> matches = repo.searchMatching(clean, PageRequest.of(0, 25));
+        String searchTerm = clean.replace('_', ' ').trim();
+        List<AssetType> assetTypes = switch (searchTerm.toLowerCase(java.util.Locale.ROOT)) {
+            case "stock", "stocks", "equity", "equities" -> List.of(AssetType.EQUITY);
+            case "commodity", "commodities" -> List.of(AssetType.COMMODITY);
+            case "mutual fund", "mutual funds", "mutual", "funds" -> List.of(AssetType.MUTUAL);
+            case "bond", "bonds", "fixed income" -> List.of(AssetType.BOND);
+            case "etf", "etfs", "exchange traded fund", "exchange traded funds" -> List.of(AssetType.ETF);
+            case "crypto", "cryptocurrency", "cryptocurrencies", "digital assets" -> List.of(AssetType.CRYPTO);
+            case "reit", "reits", "real estate" -> List.of(AssetType.REIT);
+            case "cash", "forex", "foreign exchange", "currency", "currencies" -> List.of(AssetType.CASH);
+            default -> List.of();
+        };
+        List<SecurityDetails> matches = assetTypes.isEmpty()
+                ? repo.searchMatching(searchTerm)
+                : repo.findAllByAssetTypeIn(assetTypes);
         if (matches.isEmpty()) {
             return List.of();
         }
@@ -73,7 +88,10 @@ public class SecurityDetailsService {
                 .toList();
 
         Map<Long, DailyPrice> latestBySecurityId = new HashMap<>();
-        for (DailyPrice price : dailyPrices.findBySecurityIdInOrderBySecurityIdAscTradeDateDesc(securityIds)) {
+        List<DailyPrice> searchPrices = asOfDate == null
+                ? dailyPrices.findLatestBySecurityIdIn(securityIds)
+                : dailyPrices.findLatestBySecurityIdInOnOrBefore(securityIds, asOfDate);
+        for (DailyPrice price : searchPrices) {
             if (price == null || price.getSecurityId() == null) {
                 continue;
             }

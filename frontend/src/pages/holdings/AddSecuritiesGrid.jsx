@@ -52,7 +52,7 @@ export function AddSecuritiesGrid({ securities, holdings, model, currency, busy,
   );
 
   const filteredSecurities = useMemo(() => {
-    const trimmed = query.trim().toLowerCase();
+    const trimmed = query.trim().toLowerCase().replaceAll('_', ' ');
     if (!trimmed) return [];
     return securities.filter((security) => {
       const haystack = [
@@ -65,7 +65,7 @@ export function AddSecuritiesGrid({ securities, holdings, model, currency, busy,
         security.equityCategory,
         security.series,
         security.country
-      ].filter(Boolean).join(' ').toLowerCase();
+      ].filter(Boolean).join(' ').toLowerCase().replaceAll('_', ' ');
       return haystack.includes(trimmed) || String(security.securityId).includes(trimmed);
     });
   }, [securities, query]);

@@ -2,12 +2,10 @@ package com.hexaware.portfolio.security.controller;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
+import java.time.LocalDate;
 
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,10 +27,13 @@ public class SecurityMasterController {
     private final SecurityDetailsService securities;
 
     @GetMapping
-    @Cacheable(cacheNames = "security-master", key = "#page + ':' + #pageSize")
     public SecurityMasterPageResponse list(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int pageSize) {
+            @RequestParam(defaultValue = "50") int pageSize,
+            @RequestParam(required = false) String exchange,
+            @RequestParam(required = false) String isin,
+            @RequestParam(required = false) String sector,
+            @RequestParam(required = false) String industry) {
         if (page < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page must be zero or greater");
         }
@@ -40,26 +41,39 @@ public class SecurityMasterController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page size must be between 1 and 200");
         }
 
-        Pageable pageable = PageRequest.of(page, pageSize,
-                Sort.by("exchange").ascending()
-                        .and(Sort.by("symbol").ascending())
-                        .and(Sort.by("securityId").ascending()));
-
-        Page<SecurityDetails> securityPage = securities.findPage(pageable);
-        List<SecurityMasterResponse> content = securityPage.getContent().stream()
+        List<SecurityMasterResponse> filtered = securities.findAll().stream()
                 .map(SecurityMasterResponse::from)
+                .filter(s -> containsIgnoreCase(s.exchange(), exchange))
+                .filter(s -> containsIgnoreCase(s.isin(), isin))
+                .filter(s -> equalsIgnoreCase(s.sector(), sector))
+                .filter(s -> equalsIgnoreCase(s.industry(), industry))
                 .sorted(Comparator.comparing((SecurityMasterResponse s) -> normalizeExchange(s.exchange()), String.CASE_INSENSITIVE_ORDER)
                         .thenComparing((SecurityMasterResponse s) -> normalizeText(s.symbol()), String.CASE_INSENSITIVE_ORDER)
                         .thenComparing((SecurityMasterResponse s) -> normalizeText(s.name()), String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(SecurityMasterResponse::securityId, Comparator.nullsLast(Long::compareTo)))
                 .toList();
 
+        long total = filtered.size();
+        int totalPages = (int) Math.ceil((double) total / pageSize);
+        int from = Math.min(page * pageSize, filtered.size());
+        int to = Math.min(from + pageSize, filtered.size());
+        List<SecurityMasterResponse> content = filtered.subList(from, to);
+
         return new SecurityMasterPageResponse(
                 content,
-                securityPage.getTotalElements(),
-                securityPage.getTotalPages(),
-                securityPage.getNumber(),
-                securityPage.getSize());
+                total,
+                totalPages,
+                page,
+                pageSize);
+    }
+
+    @GetMapping("/filter-options")
+    public Map<String, List<String>> filterOptions() {
+        List<SecurityMasterResponse> all = securities.findAll().stream().map(SecurityMasterResponse::from).toList();
+        return Map.of(
+                "exchanges", all.stream().map(SecurityMasterResponse::exchange).filter(v -> v != null && !v.isBlank()).collect(java.util.stream.Collectors.toCollection(TreeSet::new)).stream().toList(),
+                "sectors", all.stream().map(SecurityMasterResponse::sector).filter(v -> v != null && !v.isBlank()).collect(java.util.stream.Collectors.toCollection(TreeSet::new)).stream().toList(),
+                "industries", all.stream().map(SecurityMasterResponse::industry).filter(v -> v != null && !v.isBlank()).collect(java.util.stream.Collectors.toCollection(TreeSet::new)).stream().toList());
     }
 
     private String normalizeExchange(String exchange) {
@@ -74,6 +88,14 @@ public class SecurityMasterController {
             return "";
         }
         return value.trim();
+    }
+
+    private boolean containsIgnoreCase(String value, String filter) {
+        return filter == null || filter.isBlank() || (value != null && value.toLowerCase().contains(filter.trim().toLowerCase()));
+    }
+
+    private boolean equalsIgnoreCase(String value, String filter) {
+        return filter == null || filter.isBlank() || (value != null && value.equalsIgnoreCase(filter.trim()));
     }
 
     @GetMapping("/search")
@@ -102,11 +124,12 @@ public class SecurityMasterController {
 
     @GetMapping("/match")
     public List<com.hexaware.portfolio.security.dto.SecuritySearchResponse> match(
-            @RequestParam String query) {
+            @RequestParam String query,
+            @RequestParam(required = false) LocalDate date) {
         if (query == null || query.isBlank()) {
             return List.of();
         }
-        return securities.searchMatching(query);
+        return securities.searchMatching(query, date);
     }
 
     private ResponseStatusException notFound(String message) {

@@ -35,8 +35,8 @@ public record SecuritySearchResponse(
         String status = normalize(security.getStatus(), "ACTIVE");
         String series = normalize(security.getSeries(), "-");
         String isin = normalize(security.getIsin(), "N/A");
-        String sector = security.getGicsIndustry() == null ? "Unclassified" : normalize(security.getGicsIndustry().getSectorName(), "Unclassified");
-        String industry = security.getGicsIndustry() == null ? "Unclassified" : normalize(security.getGicsIndustry().getIndustryName(), "Unclassified");
+        String sector = SecurityClassification.sector(security);
+        String industry = SecurityClassification.industry(security);
 
         return new SecuritySearchResponse(
                 security.getSecurityId(),

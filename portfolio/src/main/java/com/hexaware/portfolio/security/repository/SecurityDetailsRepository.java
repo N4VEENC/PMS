@@ -37,13 +37,29 @@ public interface SecurityDetailsRepository extends JpaRepository<SecurityDetails
 
     Optional<SecurityDetails> findBySymbolAndSeries(String symbol, String series);
 
+    @EntityGraph(attributePaths = "gicsIndustry")
     @Query("""
             select s from SecurityDetails s
-            where lower(s.symbol) like lower(concat('%', :query, '%'))
-               or lower(s.isin) like lower(concat('%', :query, '%'))
-               or lower(s.name) like lower(concat('%', :query, '%'))
-               or lower(s.description) like lower(concat('%', :query, '%'))
-               or lower(s.exchange) like lower(concat('%', :query, '%'))
+            left join s.gicsIndustry g
+            where lower(coalesce(s.symbol, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(s.isin, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(s.series, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(s.name, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(s.description, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(s.exchange, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(s.currency, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(s.country, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(s.market, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(s.riskLevel, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(s.status, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(s.logoUrl, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(s.websiteUrl, '')) like lower(concat('%', :query, '%'))
+               or lower(replace(str(s.assetType), '_', ' ')) like lower(concat('%', :query, '%'))
+               or lower(replace(coalesce(str(s.equityCategory), ''), '_', ' ')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(g.industryCode, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(g.sectorCode, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(g.sectorName, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(g.industryName, '')) like lower(concat('%', :query, '%'))
             order by
                case
                    when lower(s.symbol) = lower(:query) then 0
@@ -52,7 +68,8 @@ public interface SecurityDetailsRepository extends JpaRepository<SecurityDetails
                end,
                s.symbol asc
             """)
-    List<SecurityDetails> searchMatching(@Param("query") String query, Pageable pageable);
+    List<SecurityDetails> searchMatching(@Param("query") String query);
 
+    @EntityGraph(attributePaths = "gicsIndustry")
     List<SecurityDetails> findAllByAssetTypeIn(Collection<AssetType> assetTypes);
 }

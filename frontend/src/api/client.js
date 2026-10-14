@@ -82,9 +82,10 @@ export const api = {
 		list: async () => (await client.get('/asset-classes')).data
 	},
 	securities: {
-		list: async ({ page = 0, pageSize = 50 } = {}) => (await client.get('/securities', { params: { page, pageSize } })).data,
+		list: async ({ page = 0, pageSize = 50, exchange, isin, sector, industry } = {}) => (await client.get('/securities', { params: { page, pageSize, exchange, isin, sector, industry } })).data,
+		filterOptions: async () => (await client.get('/securities/filter-options')).data,
 		search: async (params) => (await client.get('/securities/search', { params })).data,
-		match: async (query) => (await client.get('/securities/match', { params: { query } })).data
+		match: async (query, date) => (await client.get('/securities/match', { params: { query, date } })).data
 	},
 	holdings: {
 		list: async (portfolioId) => (await client.get(`/portfolios/${portfolioId}/holdings`)).data,

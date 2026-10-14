@@ -87,7 +87,9 @@ export function useHoldingsData(portfolioId) {
     setError('');
 
     try {
-      const matches = await api.securities.match(trimmed);
+      const portfolio = state.portfolio || await api.portfolios.get(portfolioId);
+      const priceDate = portfolio.holdingsSaved ? localDateString() : portfolio.purchaseDate || localDateString();
+      const matches = await api.securities.match(trimmed, priceDate);
       if (requestId !== searchRequestRef.current) {
         return [];
       }
@@ -113,7 +115,7 @@ export function useHoldingsData(portfolioId) {
         setEligibleLoading(false);
       }
     }
-  }, [portfolioId]);
+  }, [portfolioId, state.portfolio]);
 
   useEffect(() => {
     setLoading(true);

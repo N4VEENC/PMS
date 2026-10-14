@@ -53,6 +53,7 @@ export function SecuritiesPage() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [master, setMaster] = useState([]);
+  const [filterOptions, setFilterOptions] = useState({ exchanges: [], sectors: [], industries: [] });
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const [totalElements, setTotalElements] = useState(0);
@@ -61,8 +62,12 @@ export function SecuritiesPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    api.securities.filterOptions().then(setFilterOptions).catch((e) => setError(e.message || 'Unable to load security filters'));
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
-    api.securities.list({ page, pageSize })
+    api.securities.list({ page, pageSize, exchange: masterExchange, isin: masterIsin, sector: masterSector, industry: masterIndustry })
       .then((pageResponse) => {
         setMaster(pageResponse.content || []);
         setTotalElements(pageResponse.totalElements || 0);
@@ -70,30 +75,12 @@ export function SecuritiesPage() {
       })
       .catch((e) => setError(e.message || 'Unable to load securities'))
       .finally(() => setLoading(false));
-  }, [page, pageSize]);
+  }, [page, pageSize, masterExchange, masterIsin, masterSector, masterIndustry]);
 
-  const exchanges = useMemo(() => [...new Set(master.map((security) => security.exchange).filter(Boolean))].sort(), [master]);
-  const sectors = useMemo(() => [...new Set(master.map((security) => security.sector).filter(Boolean))].sort(), [master]);
-  const industries = useMemo(() => [...new Set(master
-    .filter((security) => !masterSector || security.sector === masterSector)
-    .map((security) => security.industry)
-    .filter(Boolean))].sort(), [master, masterSector]);
-  const filteredMaster = useMemo(() => {
-    const exchangeQuery = masterExchange.trim().toLowerCase();
-    const isinQuery = masterIsin.trim().toLowerCase();
-    return master.filter((security) =>
-      (!exchangeQuery || String(security.exchange || '').trim().toLowerCase() === exchangeQuery)
-      && (!isinQuery || String(security.isin || '').toLowerCase().includes(isinQuery))
-      && (!masterSector || security.sector === masterSector)
-      && (!masterIndustry || security.industry === masterIndustry)
-    ).sort((a, b) => {
-      const exchangeA = String(a.exchange || 'ZZZ').trim();
-      const exchangeB = String(b.exchange || 'ZZZ').trim();
-      const exchangeCompare = exchangeA.localeCompare(exchangeB, undefined, { sensitivity: 'base' });
-      if (exchangeCompare !== 0) return exchangeCompare;
-      return String(a.symbol || '').localeCompare(String(b.symbol || ''), undefined, { sensitivity: 'base' });
-    });
-  }, [master, masterExchange, masterIsin, masterSector, masterIndustry]);
+  const exchanges = filterOptions.exchanges;
+  const sectors = filterOptions.sectors;
+  const industries = filterOptions.industries;
+  const filteredMaster = master;
   const idLabel = isLse(exchange) ? 'CUPID' : 'ISIN';
   const firstRow = totalElements === 0 ? 0 : page * pageSize + 1;
   const lastRow = Math.min((page + 1) * pageSize, totalElements);
@@ -146,9 +133,9 @@ export function SecuritiesPage() {
       filter: false,
       headerComponent: ExchangeHeader,
       headerComponentParams: {
-        exchanges: ['NSE', 'LSE', 'NASDAQ'],
+        exchanges,
         selectedExchange: masterExchange,
-        onExchangeChange: setMasterExchange
+        onExchangeChange: (value) => { setMasterExchange(value); setPage(0); }
       }
     },
     textCol('series', 'Series', { minWidth: 100 }),
@@ -224,20 +211,20 @@ export function SecuritiesPage() {
               <input
                 className="field h-9"
                 value={masterIsin}
-                onChange={(event) => setMasterIsin(event.target.value)}
+                onChange={(event) => { setMasterIsin(event.target.value); setPage(0); }}
                 placeholder="Filter ISIN"
               />
             </label>
             <label className="w-44">
               <span className="sr-only">Filter by sector</span>
-              <select className="field h-9" value={masterSector} onChange={(event) => { setMasterSector(event.target.value); setMasterIndustry(''); }}>
+              <select className="field h-9" value={masterSector} onChange={(event) => { setMasterSector(event.target.value); setMasterIndustry(''); setPage(0); }}>
                 <option value="">All sectors</option>
                 {sectors.map((sector) => <option key={sector} value={sector}>{sector}</option>)}
               </select>
             </label>
             <label className="w-48">
               <span className="sr-only">Filter by industry</span>
-              <select className="field h-9" value={masterIndustry} onChange={(event) => setMasterIndustry(event.target.value)}>
+              <select className="field h-9" value={masterIndustry} onChange={(event) => { setMasterIndustry(event.target.value); setPage(0); }}>
                 <option value="">All industries</option>
                 {industries.map((industry) => <option key={industry} value={industry}>{industry}</option>)}
               </select>

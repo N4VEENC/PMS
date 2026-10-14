@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.hexaware.portfolio.security.entity.DailyPrice;
 
@@ -17,6 +19,29 @@ public interface DailyPriceRepository extends JpaRepository<DailyPrice, Long> {
     List<DailyPrice> findBySecurityIdIn(Collection<Long> securityIds);
 
     List<DailyPrice> findBySecurityIdInOrderBySecurityIdAscTradeDateDesc(Collection<Long> securityIds);
+
+    @Query("""
+            select p from DailyPrice p
+            where p.securityId in :securityIds
+              and p.tradeDate = (
+                  select max(latest.tradeDate) from DailyPrice latest
+                  where latest.securityId = p.securityId
+              )
+            """)
+    List<DailyPrice> findLatestBySecurityIdIn(@Param("securityIds") Collection<Long> securityIds);
+
+    @Query("""
+            select p from DailyPrice p
+            where p.securityId in :securityIds
+              and p.tradeDate = (
+                  select max(previous.tradeDate) from DailyPrice previous
+                  where previous.securityId = p.securityId
+                    and previous.tradeDate <= :asOfDate
+              )
+            """)
+    List<DailyPrice> findLatestBySecurityIdInOnOrBefore(
+            @Param("securityIds") Collection<Long> securityIds,
+            @Param("asOfDate") LocalDate asOfDate);
 
     List<DailyPrice> findBySecurityIdAndTradeDateBetween(Long securityId, LocalDate from, LocalDate to);
 
