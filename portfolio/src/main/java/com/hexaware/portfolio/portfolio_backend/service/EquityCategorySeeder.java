@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ import com.hexaware.portfolio.security.repository.SecurityDetailsRepository;
 import lombok.RequiredArgsConstructor;
 
 @Component
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class EquityCategorySeeder implements CommandLineRunner {
     private static final Map<String, EquityCategory> KNOWN_CATEGORIES = Map.of(

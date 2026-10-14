@@ -3,6 +3,7 @@ package com.hexaware.portfolio.benchmark.service;
 import java.util.List;
 
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import com.hexaware.portfolio.benchmark.entity.BenchmarkIndex;
@@ -11,6 +12,7 @@ import com.hexaware.portfolio.benchmark.repository.BenchmarkIndexRepository;
 import lombok.RequiredArgsConstructor;
 
 @Component
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class BenchmarkMetadataSeeder implements CommandLineRunner {
     private final BenchmarkIndexRepository benchmarkIndexes;

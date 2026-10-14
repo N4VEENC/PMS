@@ -8,9 +8,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +24,12 @@ import com.hexaware.portfolio.portfolio_backend.entity.PortfolioTrade;
 import com.hexaware.portfolio.portfolio_backend.entity.enums.AssetClass;
 import com.hexaware.portfolio.portfolio_backend.exceptions.PortfolioValidationException;
 import com.hexaware.portfolio.portfolio_backend.exceptions.SecurityNotFoundException;
+import com.hexaware.portfolio.portfolio_backend.repository.PortfolioHoldingRepository;
+import com.hexaware.portfolio.portfolio_backend.repository.PortfolioRepository;
+import com.hexaware.portfolio.portfolio_backend.repository.PortfolioTradeRepository;
+import com.hexaware.portfolio.portfolio_backend.repository.ThemeRepository;
+import com.hexaware.portfolio.portfolio_backend.security.CurrentUserService;
+import com.hexaware.portfolio.portfolio_backend.service.holdings.HoldingAllocationService;
 import com.hexaware.portfolio.security.entity.AssetType;
 import com.hexaware.portfolio.security.entity.DailyPrice;
 import com.hexaware.portfolio.security.entity.SecurityDetails;
@@ -108,6 +118,68 @@ class HoldingSecurityServiceTest {
         assertEquals(latest, service.latestPrice(2L));
         assertEquals(historical, service.priceOnOrBefore(2L, date));
         verify(prices).findTopBySecurityIdOrderByTradeDateDesc(2L);
+    }
+
+    @Test
+    void batchPriceLookupKeepsNewestPriceOnOrBeforeCutoff() throws Exception {
+        LocalDate cutoff = LocalDate.of(2026, 2, 15);
+        DailyPrice p1New = new DailyPrice();
+        p1New.setSecurityId(1L);
+        p1New.setTradeDate(LocalDate.of(2026, 2, 14));
+        DailyPrice p1Old = new DailyPrice();
+        p1Old.setSecurityId(1L);
+        p1Old.setTradeDate(LocalDate.of(2026, 1, 5));
+        DailyPrice p2New = new DailyPrice();
+        p2New.setSecurityId(2L);
+        p2New.setTradeDate(LocalDate.of(2026, 2, 13));
+        DailyPrice p2Old = new DailyPrice();
+        p2Old.setSecurityId(2L);
+        p2Old.setTradeDate(LocalDate.of(2026, 1, 10));
+
+        when(prices.findLatestBySecurityIdInOnOrBefore(Set.of(1L, 2L), cutoff))
+                .thenReturn(List.of(p1New, p2New));
+
+        PortfolioRepository portfolios = mock(PortfolioRepository.class);
+        PortfolioHoldingRepository holdings = mock(PortfolioHoldingRepository.class);
+        PortfolioTradeRepository trades = mock(PortfolioTradeRepository.class);
+        ThemeRepository themes = mock(ThemeRepository.class);
+        CurrentUserService currentUser = mock(CurrentUserService.class);
+        HoldingAllocationService allocationService = mock(HoldingAllocationService.class);
+
+        PortfolioHoldingService portfolioService = new PortfolioHoldingService(
+                portfolios, holdings, trades, securities, prices, themes, currentUser,
+                service, allocationService);
+
+        Method method = PortfolioHoldingService.class.getDeclaredMethod("loadPricesOnOrBefore", java.util.Collection.class, LocalDate.class);
+        method.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        Map<Long, DailyPrice> pricesOnOrBefore = (Map<Long, DailyPrice>) method.invoke(
+                portfolioService, Set.of(1L, 2L), cutoff);
+
+        verify(prices).findLatestBySecurityIdInOnOrBefore(Set.of(1L, 2L), cutoff);
+        assertEquals(LocalDate.of(2026, 2, 14), pricesOnOrBefore.get(1L).getTradeDate());
+        assertEquals(LocalDate.of(2026, 2, 13), pricesOnOrBefore.get(2L).getTradeDate());
+        assertEquals(2, pricesOnOrBefore.size());
+    }
+
+    @Test
+    void sharedBulkPriceLookupReusesTheSameLatestPriceCacheKeying() {
+        LocalDate cutoff = LocalDate.of(2026, 2, 15);
+        DailyPrice p1 = new DailyPrice();
+        p1.setSecurityId(1L);
+        p1.setTradeDate(LocalDate.of(2026, 2, 14));
+        DailyPrice p2 = new DailyPrice();
+        p2.setSecurityId(2L);
+        p2.setTradeDate(LocalDate.of(2026, 2, 13));
+
+        when(prices.findLatestBySecurityIdInOnOrBefore(Set.of(1L, 2L), cutoff)).thenReturn(List.of(p1, p2));
+
+        Map<Long, DailyPrice> bySecurity = service.latestPricesForSecurityIds(Set.of(1L, 2L), cutoff);
+
+        assertEquals(LocalDate.of(2026, 2, 14), bySecurity.get(1L).getTradeDate());
+        assertEquals(LocalDate.of(2026, 2, 13), bySecurity.get(2L).getTradeDate());
+        assertEquals(2, bySecurity.size());
     }
 
     @Test

@@ -58,6 +58,8 @@ public class SecurityConfig {
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Authentication required")))
             .authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.OPTIONS, "/**")
                                                 .permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/api/securities/**")
+                                                .permitAll()
                                                 .requestMatchers(
                                                     "/api/auth/**",
                                                     "/swagger-ui/**",

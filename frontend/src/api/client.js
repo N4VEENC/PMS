@@ -5,7 +5,7 @@ const client = axios.create({
 	headers: {
 		'Content-Type': 'application/json'
 	},
-	timeout: 10000
+	timeout: 30000
 });
 
 client.interceptors.request.use((config) => {
@@ -82,7 +82,7 @@ export const api = {
 		list: async () => (await client.get('/asset-classes')).data
 	},
 	securities: {
-		list: async ({ page = 0, pageSize = 50, exchange, isin, sector, industry } = {}) => (await client.get('/securities', { params: { page, pageSize, exchange, isin, sector, industry } })).data,
+		list: async ({ page = 0, pageSize = 50, exchange, isin, assetClass, sector, industry } = {}) => (await client.get('/securities', { params: { page, pageSize, exchange, isin, assetClass, sector, industry } })).data,
 		filterOptions: async () => (await client.get('/securities/filter-options')).data,
 		search: async (params) => (await client.get('/securities/search', { params })).data,
 		match: async (query, date) => (await client.get('/securities/match', { params: { query, date } })).data
@@ -90,7 +90,7 @@ export const api = {
 	holdings: {
 		list: async (portfolioId) => (await client.get(`/portfolios/${portfolioId}/holdings`)).data,
 		summary: async (portfolioId) => (await client.get(`/portfolios/${portfolioId}/holdings/summary`)).data,
-		eligibleSecurities: async (portfolioId, date) => (await client.get(`/portfolios/${portfolioId}/holdings/eligible-securities`, { params: { date } })).data,
+		eligibleSecurities: async (portfolioId, date, { page = 0, pageSize = 100 } = {}) => (await client.get(`/portfolios/${portfolioId}/holdings/eligible-securities`, { params: { date, page, pageSize } })).data,
 		valuation: async (portfolioId, date) => (await client.get(`/portfolios/${portfolioId}/holdings/valuation`, { params: { date } })).data,
 		valuations: async (portfolioId, dates) => (await client.post(`/portfolios/${portfolioId}/holdings/valuation/history`, { dates })).data,
 		rebalance: async (portfolioId, payload) => client.post(`/portfolios/${portfolioId}/holdings/rebalance`, payload),

@@ -9,16 +9,19 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import com.hexaware.portfolio.security.dto.SecurityMasterResponse;
 import com.hexaware.portfolio.security.dto.SecuritySearchResponse;
 import com.hexaware.portfolio.security.entity.DailyPrice;
 import com.hexaware.portfolio.security.entity.AssetType;
 import com.hexaware.portfolio.security.entity.SecurityDetails;
 import com.hexaware.portfolio.security.repository.DailyPriceRepository;
 import com.hexaware.portfolio.security.repository.SecurityDetailsRepository;
+import com.hexaware.portfolio.security.service.MarketPriceSupport;
 
 import lombok.RequiredArgsConstructor;
 
@@ -47,6 +50,11 @@ public class SecurityDetailsService {
 
     public Optional<SecurityDetails> getBySymbolAndSeries(String symbol, String series) {
         return repo.findBySymbolAndSeries(symbol, series);
+    }
+
+    @Cacheable(cacheNames = "security-master", key = "'all'")
+    public List<SecurityMasterResponse> getAllMasterResponses() {
+        return repo.findAll().stream().map(SecurityMasterResponse::from).toList();
     }
 
     public List<SecurityDetails> findAll() {
@@ -87,26 +95,14 @@ public class SecurityDetailsService {
                 .filter(java.util.Objects::nonNull)
                 .toList();
 
-        Map<Long, DailyPrice> latestBySecurityId = new HashMap<>();
-        List<DailyPrice> searchPrices = asOfDate == null
-                ? dailyPrices.findLatestBySecurityIdIn(securityIds)
-                : dailyPrices.findLatestBySecurityIdInOnOrBefore(securityIds, asOfDate);
-        for (DailyPrice price : searchPrices) {
-            if (price == null || price.getSecurityId() == null) {
-                continue;
-            }
-            latestBySecurityId.putIfAbsent(price.getSecurityId(), price);
-        }
+        Map<Long, DailyPrice> latestBySecurityId = asOfDate == null
+                ? MarketPriceSupport.indexLatestPrices(dailyPrices.findLatestBySecurityIdIn(securityIds))
+                : MarketPriceSupport.indexLatestPrices(dailyPrices.findLatestBySecurityIdInOnOrBeforeOptimized(securityIds, asOfDate));
 
         return matches.stream()
                 .map(security -> {
                     DailyPrice price = latestBySecurityId.get(security.getSecurityId());
-                    BigDecimal currentPrice = price == null ? null
-                            : price.getValuationPrice() != null ? price.getValuationPrice()
-                            : price.getClosePrice() != null ? price.getClosePrice()
-                            : price.getNav() != null ? price.getNav()
-                            : price.getSpotPrice() != null ? price.getSpotPrice()
-                            : price.getLastPrice();
+                    BigDecimal currentPrice = price == null ? null : MarketPriceSupport.priceValue(price);
                     return SecuritySearchResponse.from(
                             security,
                             currentPrice,
@@ -115,12 +111,12 @@ public class SecurityDetailsService {
                 .toList();
     }
 
-    @CacheEvict(cacheNames = "security-master", allEntries = true)
+    @CacheEvict(cacheNames = "security-master", key = "'all'")
     public SecurityDetails save(SecurityDetails entity) {
         return repo.save(entity);
     }
 
-    @CacheEvict(cacheNames = "security-master", allEntries = true)
+    @CacheEvict(cacheNames = "security-master", key = "'all'")
     public List<SecurityDetails> saveAll(List<SecurityDetails> entities) {
         return repo.saveAll(entities);
     }

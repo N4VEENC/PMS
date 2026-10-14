@@ -18,7 +18,7 @@ const REQUIRED = [
 ];
 const missingFields = (s) => REQUIRED.filter(([, get]) => { const v = get(s); return v == null || String(v).trim() === ''; }).map(([name]) => name);
 
-function ExchangeHeader({ displayName, exchanges, selectedExchange, onExchangeChange }) {
+function ExchangeHeader({ displayName, exchanges = [], selectedExchange = '', onExchangeChange = () => {} }) {
   return (
     <div className="flex h-full flex-col justify-center gap-1 px-1">
       <span className="font-semibold">{displayName}</span>
@@ -40,11 +40,34 @@ function ExchangeHeader({ displayName, exchanges, selectedExchange, onExchangeCh
   );
 }
 
+function AssetClassHeader({ displayName, assetClasses = [], selectedAssetClass = '', onAssetClassChange = () => {} }) {
+  return (
+    <div className="flex h-full flex-col justify-center gap-1 px-1">
+      <span className="font-semibold">{displayName}</span>
+      <select
+        aria-label="Filter securities by asset class"
+        className="field h-7 min-w-0 px-1 text-xs"
+        value={selectedAssetClass}
+        onChange={(event) => {
+          onAssetClassChange(event.target.value);
+          event.currentTarget.blur();
+        }}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <option value="">All</option>
+        {assetClasses.map((assetClass) => <option key={assetClass} value={assetClass}>{assetClass}</option>)}
+      </select>
+    </div>
+  );
+}
+
 export function SecuritiesPage() {
   const [mode, setMode] = useState('symbol');
   const [symbol, setSymbol] = useState('');
   const [exchange, setExchange] = useState('');
   const [masterExchange, setMasterExchange] = useState('');
+  const [masterAssetClass, setMasterAssetClass] = useState('');
   const [masterIsin, setMasterIsin] = useState('');
   const [masterSector, setMasterSector] = useState('');
   const [masterIndustry, setMasterIndustry] = useState('');
@@ -53,7 +76,7 @@ export function SecuritiesPage() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [master, setMaster] = useState([]);
-  const [filterOptions, setFilterOptions] = useState({ exchanges: [], sectors: [], industries: [] });
+  const [filterOptions, setFilterOptions] = useState({ exchanges: [], assetClasses: [], series: [], sectors: [], industries: [] });
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const [totalElements, setTotalElements] = useState(0);
@@ -67,7 +90,7 @@ export function SecuritiesPage() {
 
   useEffect(() => {
     setLoading(true);
-    api.securities.list({ page, pageSize, exchange: masterExchange, isin: masterIsin, sector: masterSector, industry: masterIndustry })
+    api.securities.list({ page, pageSize, exchange: masterExchange, isin: masterIsin, assetClass: masterAssetClass, sector: masterSector, industry: masterIndustry })
       .then((pageResponse) => {
         setMaster(pageResponse.content || []);
         setTotalElements(pageResponse.totalElements || 0);
@@ -75,11 +98,31 @@ export function SecuritiesPage() {
       })
       .catch((e) => setError(e.message || 'Unable to load securities'))
       .finally(() => setLoading(false));
-  }, [page, pageSize, masterExchange, masterIsin, masterSector, masterIndustry]);
+  }, [page, pageSize, masterExchange, masterAssetClass, masterIsin, masterSector, masterIndustry]);
 
-  const exchanges = filterOptions.exchanges;
-  const sectors = filterOptions.sectors;
-  const industries = filterOptions.industries;
+  const normalizeAssetClassValue = (value) => String(value ?? '').trim().replace(/[-\s]+/g, '_').toUpperCase();
+
+  const exchanges = filterOptions?.exchanges ?? [];
+  const assetClasses = useMemo(() => {
+    const canonical = [
+      'STOCKS',
+      'MUTUAL_FUNDS',
+      'COMMODITIES',
+      'BONDS',
+      'CRYPTO',
+      'REITS',
+      'ETFS',
+      'CASH'
+    ];
+    const fromFilterOptions = (filterOptions?.assetClasses ?? []).map(normalizeAssetClassValue);
+    const fromGrid = master
+      .map((row) => row.assetClass)
+      .map(normalizeAssetClassValue)
+      .filter((value) => value !== '');
+    return [...new Set([...canonical, ...fromFilterOptions, ...fromGrid])].sort((a, b) => String(a).localeCompare(String(b)));
+  }, [filterOptions, master]);
+  const sectors = filterOptions?.sectors ?? [];
+  const industries = filterOptions?.industries ?? [];
   const filteredMaster = master;
   const idLabel = isLse(exchange) ? 'CUPID' : 'ISIN';
   const firstRow = totalElements === 0 ? 0 : page * pageSize + 1;
@@ -141,7 +184,21 @@ export function SecuritiesPage() {
     textCol('series', 'Series', { minWidth: 100 }),
     textCol('description', 'Description', { minWidth: 260, flex: 2 }),
     { headerName: 'Security ID', colId: 'id', minWidth: 170, filter: 'agTextColumnFilter', valueGetter: ({ data }) => data.isin || data.cupid || data.securityId },
-    textCol('assetClass', 'Asset class', { minWidth: 130, valueFormatter: ({ value }) => formatAssetClass(value) }),
+    {
+      field: 'assetClass',
+      headerName: 'Asset class',
+      minWidth: 150,
+      sortable: false,
+      filter: false,
+      suppressMenu: true,
+      valueFormatter: ({ value }) => formatAssetClass(value),
+      headerComponent: AssetClassHeader,
+      headerComponentParams: {
+        assetClasses,
+        selectedAssetClass: masterAssetClass,
+        onAssetClassChange: (value) => { setMasterAssetClass(normalizeAssetClassValue(value)); setPage(0); }
+      }
+    },
     textCol('sector', 'Sector', { minWidth: 180 }),
     textCol('industry', 'Industry', { minWidth: 200 }),
     textCol('country', 'Country', { minWidth: 110 }),
@@ -152,7 +209,7 @@ export function SecuritiesPage() {
       tooltipValueGetter: ({ data }) => missingFields(data).join(', ') || 'All required fields present',
       cellRenderer: ({ value }) => <Pill tone={value === 'Complete' ? 'good' : 'warn'}>{value}</Pill>
     }
-  ], [masterExchange]);
+  ], [assetClasses, exchanges, masterAssetClass, masterExchange]);
 
   const missing = result ? missingFields(result) : [];
 
@@ -215,6 +272,13 @@ export function SecuritiesPage() {
                 placeholder="Filter ISIN"
               />
             </label>
+            <label className="w-40">
+              <span className="sr-only">Filter by asset class</span>
+              <select className="field h-9" value={masterAssetClass} onChange={(event) => { setMasterAssetClass(normalizeAssetClassValue(event.target.value)); setPage(0); }}>
+                <option value="">All asset classes</option>
+                {assetClasses.map((assetClass) => <option key={assetClass} value={assetClass}>{assetClass.replaceAll('_', ' ')}</option>)}
+              </select>
+            </label>
             <label className="w-44">
               <span className="sr-only">Filter by sector</span>
               <select className="field h-9" value={masterSector} onChange={(event) => { setMasterSector(event.target.value); setMasterIndustry(''); setPage(0); }}>
@@ -229,8 +293,8 @@ export function SecuritiesPage() {
                 {industries.map((industry) => <option key={industry} value={industry}>{industry}</option>)}
               </select>
             </label>
-            {(masterExchange || masterIsin || masterSector || masterIndustry) && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => { setMasterExchange(''); setMasterIsin(''); setMasterSector(''); setMasterIndustry(''); }}>
+            {(masterExchange || masterAssetClass || masterIsin || masterSector || masterIndustry) && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => { setMasterExchange(''); setMasterAssetClass(''); setMasterIsin(''); setMasterSector(''); setMasterIndustry(''); }}>
                 Clear filters
               </Button>
             )}

@@ -81,8 +81,18 @@ public class PortfolioHoldingController {
     @GetMapping("/eligible-securities")
     public ResponseEntity<List<EligibleSecurityResponse>> getEligibleSecurities(
             @PathVariable Long portfolioId,
-            @org.springframework.web.bind.annotation.RequestParam(required = false) LocalDate date) {
-        return ResponseEntity.ok(holdingService.getEligibleSecurities(portfolioId, date));
+            @org.springframework.web.bind.annotation.RequestParam(required = false) LocalDate date,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "0") int page,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "100") int pageSize) {
+        if (page < 0) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Page must be zero or greater");
+        }
+        if (pageSize < 1 || pageSize > 200) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Page size must be between 1 and 200");
+        }
+        return ResponseEntity.ok(holdingService.getEligibleSecurities(portfolioId, date, page, pageSize));
     }
 
     @GetMapping("/{holdingId}")

@@ -2,12 +2,12 @@
 spring:
   data:
     redis:
-      host: ${REDIS_HOST:history-muscle-kick-37023.db.redis.io}
-      port: ${REDIS_PORT:18596}
+      host: ${REDIS_HOST:comparison-dirt-bead-55672.db.redis.io}
+      port: ${REDIS_PORT:16166}
       username: ${REDIS_USERNAME:default}
-      password: "${REDIS_PASSWORD:M4iFw3Ej2XBS23GUEv9ApwKTXxWt5QOP}"
+      password: "${REDIS_PASSWORD:c77lAPlwgkPZ54YkHmGekhmOw5nDz3hX}"
       ssl:
-        enabled: ${REDIS_SSL_ENABLED:false}
+        enabled: ${REDIS_SSL_ENABLED:true}
       connect-timeout: 10s
       timeout: 10s
   cache:

@@ -12,6 +12,12 @@ import { formatDate, money } from '../lib/format';
 import { buildRebalanceOrders, projectRebalance } from '../lib/rebalance';
 import { localDateString } from '../lib/utils';
 
+const buildRebalanceOrdersAsync = (valuation, eligibleSecurities) => new Promise((resolve) => {
+  setTimeout(() => {
+    resolve(buildRebalanceOrders(valuation, eligibleSecurities));
+  }, 0);
+});
+
 export function RebalancePage() {
   const { id } = useParams();
   const [params] = useSearchParams();
@@ -25,18 +31,37 @@ export function RebalancePage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([
-      api.holdings.valuation(id, tradeDate),
-      api.portfolios.get(id),
-      api.holdings.eligibleSecurities(id, tradeDate)
-    ])
-      .then(([v, p, eligible]) => {
+    let active = true;
+
+    const load = async () => {
+      try {
+        const [v, p, eligible] = await Promise.all([
+          api.holdings.valuation(id, tradeDate),
+          api.portfolios.get(id),
+          api.holdings.eligibleSecurities(id, tradeDate, { page: 0, pageSize: 100 })
+        ]);
+
+        if (!active) return;
+
         setValuation(v);
         setPortfolio(p);
-        setOrders(buildRebalanceOrders(v, eligible));
-      })
-      .catch((e) => setError(e.message || 'Unable to load rebalance details'))
-      .finally(() => setLoading(false));
+
+        const rebuiltOrders = await buildRebalanceOrdersAsync(v, eligible);
+        if (!active) return;
+        setOrders(rebuiltOrders);
+      } catch (e) {
+        if (!active) return;
+        setError(e.message || 'Unable to load rebalance details');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+
+    return () => {
+      active = false;
+    };
   }, [id, tradeDate]);
 
   const currency = portfolio?.currency || 'INR';
@@ -187,6 +212,8 @@ export function RebalancePage() {
             title="Allocation: now, target, after rebalance"
             exportName="rebalance-allocation"
             searchable={false}
+            pagination
+            pageSize={8}
             rowData={projection.allocations}
             columnDefs={allocationColumns}
             getRowId={({ data }) => data.assetClass}
@@ -197,6 +224,8 @@ export function RebalancePage() {
             subtitle="Buy underweight classes and sell overweight classes. Edit quantities or choose a different eligible security before applying."
             exportName="rebalance-orders"
             actions={<Button onClick={submit} disabled={saving || !orders.length}><Save />{saving ? 'Applying…' : 'Apply rebalance'}</Button>}
+            pagination
+            pageSize={10}
             rowData={orderRows}
             columnDefs={orderColumns}
             getRowId={({ data }) => String(data.securityId)}

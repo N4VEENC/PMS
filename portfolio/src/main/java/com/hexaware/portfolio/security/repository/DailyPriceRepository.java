@@ -43,6 +43,23 @@ public interface DailyPriceRepository extends JpaRepository<DailyPrice, Long> {
             @Param("securityIds") Collection<Long> securityIds,
             @Param("asOfDate") LocalDate asOfDate);
 
+    @Query(value = """
+            select d.*
+            from daily_prices d
+            inner join (
+                select security_id, max(trade_date) as max_trade_date
+                from daily_prices
+                where security_id in (:securityIds)
+                  and trade_date <= :asOfDate
+                group by security_id
+            ) latest
+              on d.security_id = latest.security_id
+             and d.trade_date = latest.max_trade_date
+            """, nativeQuery = true)
+    List<DailyPrice> findLatestBySecurityIdInOnOrBeforeOptimized(
+            @Param("securityIds") Collection<Long> securityIds,
+            @Param("asOfDate") LocalDate asOfDate);
+
     List<DailyPrice> findBySecurityIdAndTradeDateBetween(Long securityId, LocalDate from, LocalDate to);
 
     Optional<DailyPrice> findBySecurityIdAndTradeDate(Long securityId, LocalDate date);

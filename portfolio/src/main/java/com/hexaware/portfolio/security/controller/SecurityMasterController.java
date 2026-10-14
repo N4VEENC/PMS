@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.hexaware.portfolio.portfolio_backend.entity.enums.AssetClass;
 import com.hexaware.portfolio.security.dto.SecurityMasterPageResponse;
 import com.hexaware.portfolio.security.dto.SecurityMasterResponse;
 import com.hexaware.portfolio.security.entity.SecurityDetails;
@@ -32,6 +33,7 @@ public class SecurityMasterController {
             @RequestParam(defaultValue = "50") int pageSize,
             @RequestParam(required = false) String exchange,
             @RequestParam(required = false) String isin,
+            @RequestParam(required = false) String assetClass,
             @RequestParam(required = false) String sector,
             @RequestParam(required = false) String industry) {
         if (page < 0) {
@@ -41,10 +43,11 @@ public class SecurityMasterController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page size must be between 1 and 200");
         }
 
-        List<SecurityMasterResponse> filtered = securities.findAll().stream()
-                .map(SecurityMasterResponse::from)
+        List<SecurityMasterResponse> filtered = securities.getAllMasterResponses()
+                .stream()
                 .filter(s -> containsIgnoreCase(s.exchange(), exchange))
                 .filter(s -> containsIgnoreCase(s.isin(), isin))
+                .filter(s -> assetClassMatches(s.assetClass(), assetClass))
                 .filter(s -> equalsIgnoreCase(s.sector(), sector))
                 .filter(s -> equalsIgnoreCase(s.industry(), industry))
                 .sorted(Comparator.comparing((SecurityMasterResponse s) -> normalizeExchange(s.exchange()), String.CASE_INSENSITIVE_ORDER)
@@ -70,8 +73,13 @@ public class SecurityMasterController {
     @GetMapping("/filter-options")
     public Map<String, List<String>> filterOptions() {
         List<SecurityMasterResponse> all = securities.findAll().stream().map(SecurityMasterResponse::from).toList();
+        java.util.Set<String> assetClasses = new TreeSet<>();
+        java.util.Arrays.stream(AssetClass.values()).map(Enum::name).forEach(assetClasses::add);
+        all.stream().map(SecurityMasterResponse::assetClass).filter(v -> v != null).map(Enum::name).forEach(assetClasses::add);
+
         return Map.of(
                 "exchanges", all.stream().map(SecurityMasterResponse::exchange).filter(v -> v != null && !v.isBlank()).collect(java.util.stream.Collectors.toCollection(TreeSet::new)).stream().toList(),
+                "assetClasses", assetClasses.stream().toList(),
                 "sectors", all.stream().map(SecurityMasterResponse::sector).filter(v -> v != null && !v.isBlank()).collect(java.util.stream.Collectors.toCollection(TreeSet::new)).stream().toList(),
                 "industries", all.stream().map(SecurityMasterResponse::industry).filter(v -> v != null && !v.isBlank()).collect(java.util.stream.Collectors.toCollection(TreeSet::new)).stream().toList());
     }
@@ -96,6 +104,25 @@ public class SecurityMasterController {
 
     private boolean equalsIgnoreCase(String value, String filter) {
         return filter == null || filter.isBlank() || (value != null && value.equalsIgnoreCase(filter.trim()));
+    }
+
+    private boolean assetClassMatches(AssetClass value, String filter) {
+        if (filter == null || filter.isBlank()) {
+            return true;
+        }
+        if (value == null) {
+            return false;
+        }
+        String normalizedFilter = normalizeAssetClassValue(filter);
+        return normalizeAssetClassValue(value.name()).equals(normalizedFilter)
+                || normalizeAssetClassValue(value.name().replace("_", " ")).equals(normalizedFilter);
+    }
+
+    private String normalizeAssetClassValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().replace('-', '_').replace(' ', '_').toUpperCase();
     }
 
     @GetMapping("/search")

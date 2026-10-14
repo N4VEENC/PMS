@@ -24,6 +24,7 @@ import com.hexaware.portfolio.security.repository.*;
 public class PortfolioHoldingService {
     private static final BigDecimal ZERO = BigDecimal.ZERO;
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
+    private static final int ELIGIBLE_CANDIDATE_LIMIT = 250;
     private final PortfolioRepository portfolios;
     private final PortfolioHoldingRepository holdings;
     private final PortfolioTradeRepository trades;
@@ -63,32 +64,32 @@ public class PortfolioHoldingService {
     }
 
     public List<EligibleSecurityResponse> getEligibleSecurities(Long portfolioId) {
-        return getEligibleSecurities(portfolioId, null);
+        return getEligibleSecurities(portfolioId, null, 0, 100);
     }
 
     @Cacheable(cacheNames = "eligible-securities",
-            key = "#portfolioId + ':' + (#asOfDate == null ? 'latest' : #asOfDate.toString())")
-    public List<EligibleSecurityResponse> getEligibleSecurities(Long portfolioId, LocalDate asOfDate) {
+            key = "#portfolioId + ':' + (#asOfDate == null ? 'latest' : #asOfDate.toString()) + ':' + #page + ':' + #pageSize")
+    public List<EligibleSecurityResponse> getEligibleSecurities(Long portfolioId, LocalDate asOfDate, int page, int pageSize) {
         Portfolio portfolio = ownPortfolio(portfolioId);
         Set<AssetClass> allowedAssetClasses = allocationService.allowedAssetClasses(portfolio);
         List<AssetType> allowedAssetTypes = allowedAssetClasses.isEmpty() ? List.of()
                 : allowedAssetClasses.stream().map(this::toAssetType).filter(Objects::nonNull).distinct().toList();
-        List<SecurityDetails> candidateSecurities = allowedAssetTypes.isEmpty()
-                ? securities.findAll()
-                : securities.findAllByAssetTypeIn(allowedAssetTypes);
 
-        Map<Long, DailyPrice> latestPricesBySecurity = loadLatestPricesBySecurityId(
-                candidateSecurities.stream().map(SecurityDetails::getSecurityId).filter(Objects::nonNull).toList(),
-                asOfDate);
+        List<Long> candidateSecurityIds = topCandidateSecurityIds(portfolio, ELIGIBLE_CANDIDATE_LIMIT);
+        if (candidateSecurityIds.isEmpty()) {
+            return List.of();
+        }
 
-        return candidateSecurities.stream()
+        Map<Long, DailyPrice> latestPricesBySecurity = loadLatestPricesBySecurityId(candidateSecurityIds, asOfDate);
+
+        List<EligibleSecurityResponse> items = securities.findAllById(candidateSecurityIds).stream()
+                .filter(security -> security != null && security.getSecurityId() != null)
                 .filter(security -> !isExcludedExchange(security.getExchange()))
+                .filter(security -> allowedAssetClasses.isEmpty()
+                        || allowedAssetClasses.contains(securityService.assetClass(security.getAssetType())))
+                .sorted(Comparator.comparing((SecurityDetails security) -> security.getSymbol() == null ? "" : security.getSymbol())
+                        .thenComparing(SecurityDetails::getSecurityId))
                 .map(security -> {
-                    AssetClass assetClass = securityService.assetClass(security.getAssetType());
-                    if (!allowedAssetClasses.isEmpty() && !allowedAssetClasses.contains(assetClass)) {
-                        return null;
-                    }
-
                     DailyPrice price = latestPricesBySecurity.get(security.getSecurityId());
                     if (price == null) {
                         return null;
@@ -98,14 +99,21 @@ public class PortfolioHoldingService {
                             security.getSecurityId(),
                             security.getIsin(),
                             security.getSymbol(),
-                            security.getDescription(),
-                            assetClass,
-                            security.getEquityCategory(),
+                            security.getName(),
+                            securityService.assetClass(security.getAssetType()),
                             securityService.priceValue(price),
                             price.getTradeDate());
                 })
                 .filter(Objects::nonNull)
                 .toList();
+
+        int fromIndex = Math.min(page * pageSize, items.size());
+        int toIndex = Math.min(fromIndex + pageSize, items.size());
+        return items.subList(fromIndex, toIndex);
+    }
+
+    public List<EligibleSecurityResponse> getEligibleSecurities(Long portfolioId, LocalDate asOfDate) {
+        return getEligibleSecurities(portfolioId, asOfDate, 0, 100);
     }
 
     @Transactional
@@ -321,6 +329,7 @@ public class PortfolioHoldingService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "eligible-securities", allEntries = true)
     public void rebalance(Long portfolioId, RebalanceRequest request) {
         Portfolio p = ownPortfolio(portfolioId);
         ensurePortfolioOpen(p);
@@ -329,10 +338,12 @@ public class PortfolioHoldingService {
         if (request.tradeDate().isBefore(p.getPurchaseDate()) || request.tradeDate().isAfter(LocalDate.now())) throw new PortfolioValidationException("Trade date must be between purchase date and today");
         Map<Long, BigDecimal> quantitiesAtTradeDate = new HashMap<>();
         Map<Long, PortfolioTrade> lastTradeAtTradeDate = new HashMap<>();
+        Set<Long> securityIdsForPriceLookup = new HashSet<>();
         for (PortfolioTrade prior : trades.findByPortfolioIdAndTradeDateLessThanEqualOrderByTradeDateAscIdAsc(portfolioId, request.tradeDate())) {
             Long securityId = securityService.tradeSecurityId(prior);
             quantitiesAtTradeDate.merge(securityId, prior.getSignedShares(), BigDecimal::add);
             lastTradeAtTradeDate.put(securityId, prior);
+            securityIdsForPriceLookup.add(securityId);
         }
         Map<Long, BigDecimal> requestedTrades = new LinkedHashMap<>();
         for (RebalanceRequest.TradeOrder order : request.trades()) {
@@ -345,10 +356,12 @@ public class PortfolioHoldingService {
             }
             if (securityId == null) throw new PortfolioValidationException("Every rebalance order needs a security");
             requestedTrades.merge(securityId, order.signedShares(), BigDecimal::add);
+            securityIdsForPriceLookup.add(securityId);
         }
 
         if (requestedTrades.isEmpty()) throw new PortfolioValidationException("At least one nonzero buy or sell order is required");
 
+        Map<Long, DailyPrice> priceBySecurityId = loadPricesOnOrBefore(securityIdsForPriceLookup, request.tradeDate());
         Map<AssetClass, BigDecimal> valueByClass = new EnumMap<>(AssetClass.class);
         Map<EquityCategory, BigDecimal> valueByEquityCategory = new EnumMap<>(EquityCategory.class);
         BigDecimal investedBefore = ZERO;
@@ -357,8 +370,11 @@ public class PortfolioHoldingService {
             PortfolioTrade lastTrade = lastTradeAtTradeDate.get(position.getKey());
             SecurityDetails security = securityService.resolveTrade(lastTrade);
             AssetClass assetClass = securityService.assetClass(security.getAssetType());
-            BigDecimal marketValue = securityService.priceValue(
-                    securityService.priceOnOrBefore(position.getKey(), request.tradeDate()))
+            DailyPrice tradeDatePrice = priceBySecurityId.get(position.getKey());
+            if (tradeDatePrice == null) {
+                tradeDatePrice = securityService.priceOnOrBefore(position.getKey(), request.tradeDate());
+            }
+            BigDecimal marketValue = securityService.priceValue(tradeDatePrice)
                     .multiply(position.getValue());
             investedBefore = investedBefore.add(marketValue);
             valueByClass.merge(assetClass, marketValue, BigDecimal::add);
@@ -402,7 +418,10 @@ public class PortfolioHoldingService {
                     && (equityCategory == null || !equityTargets.containsKey(equityCategory))) {
                 throw new PortfolioValidationException("This security has no configured large, mid, or small cap category");
             }
-            DailyPrice price = securityService.priceOnOrBefore(security.getSecurityId(), request.tradeDate());
+            DailyPrice price = priceBySecurityId.get(security.getSecurityId());
+            if (price == null) {
+                price = securityService.priceOnOrBefore(security.getSecurityId(), request.tradeDate());
+            }
             BigDecimal unitPrice = securityService.priceValue(price);
             BigDecimal tradeValue = unitPrice.multiply(signedShares);
             tradeValueByClass.merge(assetClass, tradeValue, BigDecimal::add);
@@ -492,6 +511,7 @@ public class PortfolioHoldingService {
         }
     }
     private void recordTrade(Long portfolioId, SecurityDetails security, AssetClass assetClass, BigDecimal quantity, BigDecimal price, LocalDate date) {
+        securityService.evictLatestPrice(security.getSecurityId());
         trades.save(PortfolioTrade.builder().portfolioId(portfolioId).securityId(security.getSecurityId()).isin(security.getIsin()).symbol(security.getSymbol())
                 .securityName(security.getName()).assetClass(assetClass).equityCategory(security.getEquityCategory()).signedShares(quantity).unitPrice(price)
                 .tradeDate(date).createdAt(Instant.now()).build());
@@ -499,22 +519,77 @@ public class PortfolioHoldingService {
 
     private record RebalanceTrade(SecurityDetails security, AssetClass assetClass, BigDecimal signedShares, BigDecimal unitPrice) {}
 
-    private Map<Long, DailyPrice> loadLatestPricesBySecurityId(Collection<Long> securityIds, LocalDate asOfDate) {
-        if (securityIds == null || securityIds.isEmpty()) {
-            return Map.of();
+    private List<Long> topCandidateSecurityIds(Portfolio portfolio, int limit) {
+        Set<AssetClass> allowedAssetClasses = allocationService.allowedAssetClasses(portfolio);
+        List<AssetType> allowedAssetTypes = allowedAssetClasses.isEmpty() ? List.of()
+                : allowedAssetClasses.stream().map(this::toAssetType).filter(Objects::nonNull).distinct().toList();
+
+        List<SecurityDetails> candidates = allowedAssetTypes.isEmpty()
+                ? securities.findAll()
+                : securities.findAllByAssetTypeIn(allowedAssetTypes);
+
+        List<SecurityDetails> filtered = candidates.stream()
+                .filter(security -> security != null && security.getSecurityId() != null)
+                .filter(security -> !isExcludedExchange(security.getExchange()))
+                .filter(security -> allowedAssetClasses.isEmpty()
+                        || allowedAssetClasses.contains(securityService.assetClass(security.getAssetType())))
+                .sorted(Comparator.comparing((SecurityDetails security) -> security.getSymbol() == null ? "" : security.getSymbol())
+                        .thenComparing(SecurityDetails::getSecurityId))
+                .toList();
+
+        if (filtered.isEmpty()) {
+            return List.of();
         }
 
-        Map<Long, DailyPrice> latestBySecurityId = new HashMap<>();
-        for (DailyPrice price : prices.findBySecurityIdInOrderBySecurityIdAscTradeDateDesc(securityIds)) {
-            if (price == null) {
-                continue;
-            }
-            if (asOfDate != null && price.getTradeDate() != null && price.getTradeDate().isAfter(asOfDate)) {
-                continue;
-            }
-            latestBySecurityId.putIfAbsent(price.getSecurityId(), price);
+        if (allowedAssetClasses.isEmpty() || allowedAssetClasses.size() == 1) {
+            return filtered.stream().limit(limit).map(SecurityDetails::getSecurityId).filter(Objects::nonNull).distinct().toList();
         }
-        return latestBySecurityId;
+
+        Map<AssetClass, List<Long>> byAssetClass = new EnumMap<>(AssetClass.class);
+        for (SecurityDetails security : filtered) {
+            AssetClass assetClass = securityService.assetClass(security.getAssetType());
+            byAssetClass.computeIfAbsent(assetClass, key -> new ArrayList<>()).add(security.getSecurityId());
+        }
+
+        List<AssetClass> classOrder = allowedAssetClasses.stream()
+                .sorted(Comparator.comparing(Enum::name))
+                .toList();
+
+        List<Long> prioritized = new ArrayList<>(limit);
+        int perClassTarget = Math.max(1, limit / classOrder.size());
+        for (AssetClass assetClass : classOrder) {
+            List<Long> ids = byAssetClass.getOrDefault(assetClass, List.of());
+            prioritized.addAll(ids.stream().distinct().limit(perClassTarget).toList());
+            if (prioritized.size() >= limit) {
+                break;
+            }
+        }
+
+        if (prioritized.size() < limit) {
+            Set<Long> alreadyAdded = new HashSet<>(prioritized);
+            for (SecurityDetails security : filtered) {
+                Long securityId = security.getSecurityId();
+                if (securityId != null && !alreadyAdded.contains(securityId)) {
+                    prioritized.add(securityId);
+                    if (prioritized.size() >= limit) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        return prioritized.stream().filter(Objects::nonNull).distinct().limit(limit).toList();
+    }
+
+    private Map<Long, DailyPrice> loadLatestPricesBySecurityId(Collection<Long> securityIds, LocalDate asOfDate) {
+        return securityService.latestPricesForSecurityIds(securityIds, asOfDate);
+    }
+
+    private Map<Long, DailyPrice> loadPricesOnOrBefore(Collection<Long> securityIds, LocalDate asOfDate) {
+        if (securityIds == null || securityIds.isEmpty() || asOfDate == null) {
+            return Map.of();
+        }
+        return securityService.latestPricesForSecurityIds(securityIds, asOfDate);
     }
 
     private AssetType toAssetType(AssetClass assetClass) {

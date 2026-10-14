@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 
 import com.hexaware.portfolio.security.entity.DailyPrice;
@@ -38,10 +39,12 @@ public class DailyPriceService {
         return repo.existsBySecurityId(securityId);
     }
 
+    @CacheEvict(cacheNames = "latest-price", key = "#entity.securityId")
     public DailyPrice save(DailyPrice entity) {
         return repo.save(entity);
     }
 
+    @CacheEvict(cacheNames = "latest-price", allEntries = true)
     public List<DailyPrice> saveAll(List<DailyPrice> rows) {
         return repo.saveAll(rows);
     }
