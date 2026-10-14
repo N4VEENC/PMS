@@ -6,16 +6,18 @@ Start the Spring Boot service on its configured port, then run:
 k6 run loadtest/loadtest.js
 ```
 
-The test lasts about 4 minutes and follows one spike profile:
+The test lasts about 10 minutes and follows a gradual ramp-and-soak profile:
 
 | Elapsed time | Active virtual users | Phase |
 |---|---:|---|
-| 0:00–1:00 | 200 | Steady baseline |
-| 1:00–1:20 | 200 → 1000 | Spike ramp-up |
-| 1:20–2:00 | 1000 | Spike peak |
-| 2:00–2:20 | 1000 → 200 | Spike ramp-down |
-| 2:20–3:40 | 200 | Recovery |
-| 3:40–4:00 | 200 → 0 | Test ramp-down |
+| 0:00–1:00 | 100 | Steady baseline |
+| 1:00–2:00 | 100 → 325 | Gradual ramp-up 1 |
+| 2:00–3:00 | 325 → 550 | Gradual ramp-up 2 |
+| 3:00–4:00 | 550 → 775 | Gradual ramp-up 3 |
+| 4:00–5:00 | 775 → 1000 | Gradual ramp-up 4 |
+| 5:00–8:00 | 1000 | Sustained peak |
+| 8:00–9:00 | 1000 → 500 | Ramp-down 1 |
+| 9:00–10:00 | 500 → 0 | Ramp-down 2 |
 
 The first three virtual users use three dedicated test managers prepared before
 the measured load starts. Each checks that they can read their own portfolio

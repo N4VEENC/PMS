@@ -12,9 +12,9 @@ const API_PATHS = {
   list_portfolios: '/api/portfolios',
 };
 const TEST_PASSWORD = __ENV.TEST_PASSWORD || 'LoadTest-Portfolio-2026!';
-const TEST_DURATION_SECONDS = 150;
+const TEST_DURATION_SECONDS = 600;
 const BASELINE_VUS = 100;
-const PEAK_VUS = 310;
+const PEAK_VUS = 1000;
 const MANAGER_ISOLATION_USERS = 3;
 const SCENARIO_GROUP = `G_${BASELINE_VUS}_to_${PEAK_VUS}_spike`;
 const THINK_TIME_SECONDS = 2;
@@ -22,11 +22,13 @@ const AUTH_START_STAGGER_SECONDS = 0.15;
 const AUTH_COHORT_SIZE = 60;
 const PHASE_MESSAGES = {
   baseline: `holding the steady ${BASELINE_VUS}-user baseline`,
-  spike_ramp_up: `ramping up from ${BASELINE_VUS} toward ${PEAK_VUS} users`,
+  spike_ramp_up_1: 'ramping up gradually from 100 toward 325 users',
+  spike_ramp_up_2: 'ramping up gradually from 325 toward 550 users',
+  spike_ramp_up_3: 'ramping up gradually from 550 toward 775 users',
+  spike_ramp_up_4: `ramping up gradually from 775 toward ${PEAK_VUS} users`,
   spike_peak: `holding the ${PEAK_VUS}-user spike`,
-  spike_ramp_down: `ramping down from ${PEAK_VUS} toward ${BASELINE_VUS} users`,
-  recovery: `holding ${BASELINE_VUS} users to observe recovery`,
-  ramp_down: 'ramping the test down to zero users',
+  spike_ramp_down_1: 'ramping down from 1000 toward 500 users',
+  spike_ramp_down_2: 'ramping down from 500 toward zero users',
 };
 const SIGNUP_PAYLOAD_TEMPLATE = Object.freeze({ email: '', username: '', password: '' });
 const LOGIN_PAYLOAD_TEMPLATE = Object.freeze({ username: '', password: '' });
@@ -42,11 +44,13 @@ const PORTFOLIO_PAYLOAD_TEMPLATE = Object.freeze({
 const API_NAMES = ['signup', 'login', 'create_portfolio', 'list_portfolios'];
 const PHASES = [
   { name: 'baseline', start: 0, end: 60 },
-  { name: 'spike_ramp_up', start: 60, end: 80 },
-  { name: 'spike_peak', start: 80, end: 100 },
-  { name: 'spike_ramp_down', start: 100, end: 120 },
-  { name: 'recovery', start: 120, end: 140 },
-  { name: 'ramp_down', start: 140, end: 150 },
+  { name: 'spike_ramp_up_1', start: 60, end: 120 },
+  { name: 'spike_ramp_up_2', start: 120, end: 180 },
+  { name: 'spike_ramp_up_3', start: 180, end: 240 },
+  { name: 'spike_ramp_up_4', start: 240, end: 300 },
+  { name: 'spike_peak', start: 300, end: 480 },
+  { name: 'spike_ramp_down_1', start: 480, end: 540 },
+  { name: 'spike_ramp_down_2', start: 540, end: 600 },
 ];
 const P95_LIMITS = {
   signup: 2500,
@@ -147,11 +151,13 @@ export const options = {
       startVUs: BASELINE_VUS,
       stages: [
         { target: BASELINE_VUS, duration: '60s' },
-        { target: PEAK_VUS, duration: '20s' },
-        { target: PEAK_VUS, duration: '20s' },
-        { target: BASELINE_VUS, duration: '20s' },
-        { target: BASELINE_VUS, duration: '20s' },
-        { target: 0, duration: '10s' },
+        { target: 325, duration: '60s' },
+        { target: 550, duration: '60s' },
+        { target: 775, duration: '60s' },
+        { target: PEAK_VUS, duration: '60s' },
+        { target: PEAK_VUS, duration: '180s' },
+        { target: 500, duration: '60s' },
+        { target: 0, duration: '60s' },
       ],
       gracefulRampDown: '2s',
       gracefulStop: '5s',
@@ -166,7 +172,7 @@ export function setup() {
   console.log('=== Portfolio API load test starting ===');
   console.log(`Started: ${new Date().toISOString()}`);
   console.log(`API under test: ${BASE_URL}`);
-  console.log(`Planned duration: about 2.5 minutes; the test starts with ${BASELINE_VUS} users and spikes to ${PEAK_VUS}.`);
+  console.log(`Planned duration: about 10 minutes; the test starts with ${BASELINE_VUS} users and gradually ramps to ${PEAK_VUS}.`);
   console.log('Each virtual user has a manager account and portfolio, then repeatedly lists portfolios.');
   console.log(`Three accounts are prepared for isolation checks; the other ${PEAK_VUS - MANAGER_ISOLATION_USERS} sign up during the measured run.`);
   console.log(`New account setup is staggered slightly. Up to ${PEAK_VUS} test accounts and portfolios may be saved in the configured database.`);
@@ -1008,7 +1014,7 @@ function renderHtmlReport(report, data) {
   </style>
 </head>
 <body>
-  <header class="hero"><div class="eyebrow">Load test • k6</div><h1>Portfolio API performance</h1><p>${BASELINE_VUS}-user baseline, spike to ${PEAK_VUS}, then recovery — 2.5-minute stress profile.</p><div class="status-pill">${passed ? 'ALL THRESHOLDS PASSED' : 'THRESHOLDS CROSSED'}</div><p class="run-time">Started ${esc(startedAt)} · Generated ${esc(generatedAt)}</p></header>
+  <header class="hero"><div class="eyebrow">Load test • k6</div><h1>Portfolio API performance</h1><p>${BASELINE_VUS}-user baseline, gradual ramp to ${PEAK_VUS}, sustained peak, then ramp-down — 10-minute load profile.</p><div class="status-pill">${passed ? 'ALL THRESHOLDS PASSED' : 'THRESHOLDS CROSSED'}</div><p class="run-time">Started ${esc(startedAt)} · Generated ${esc(generatedAt)}</p></header>
   <main>
     <div class="summary">
       <article class="stat"><span>Test duration</span><strong>${esc(duration.toFixed(1))}<small> sec</small></strong></article>
@@ -1035,7 +1041,7 @@ export function handleSummary(data) {
   data.runMetadata = {
     startedAt: new Date(Date.now() - durationMs).toISOString(),
     generatedAt,
-    profile: `${BASELINE_VUS} VUs for 60s; ramp to ${PEAK_VUS} over 20s; hold ${PEAK_VUS} for 20s; ramp to ${BASELINE_VUS} over 20s; recover for 20s; ramp down over 10s`,
+    profile: `${BASELINE_VUS} VUs for 60s; ramp to 325, 550, 775, then ${PEAK_VUS} over four 60s stages; hold ${PEAK_VUS} for 180s; ramp down to 500 and then 0 over two 60s stages`,
     plannedDurationSeconds: TEST_DURATION_SECONDS,
     requestedPeakVus: PEAK_VUS,
     timeBucketSeconds: 10,
