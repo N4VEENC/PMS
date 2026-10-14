@@ -12,9 +12,9 @@ import { formatDate, money } from '../lib/format';
 import { buildRebalanceOrders, projectRebalance } from '../lib/rebalance';
 import { localDateString } from '../lib/utils';
 
-const buildRebalanceOrdersAsync = (valuation, eligibleSecurities) => new Promise((resolve) => {
+const buildRebalanceOrdersAsync = (valuation, eligibleSecurities, theme) => new Promise((resolve) => {
   setTimeout(() => {
-    resolve(buildRebalanceOrders(valuation, eligibleSecurities));
+    resolve(buildRebalanceOrders(valuation, eligibleSecurities, theme));
   }, 0);
 });
 
@@ -35,10 +35,11 @@ export function RebalancePage() {
 
     const load = async () => {
       try {
-        const [v, p, eligible] = await Promise.all([
+        const [v, p, eligible, theme] = await Promise.all([
           api.holdings.valuation(id, tradeDate),
           api.portfolios.get(id),
-          api.holdings.eligibleSecurities(id, tradeDate, { page: 0, pageSize: 100 })
+          api.holdings.eligibleSecurities(id, tradeDate, { page: 0, pageSize: 100 }),
+          api.themes.get(id).catch(() => null)
         ]);
 
         if (!active) return;
@@ -46,7 +47,7 @@ export function RebalancePage() {
         setValuation(v);
         setPortfolio(p);
 
-        const rebuiltOrders = await buildRebalanceOrdersAsync(v, eligible);
+        const rebuiltOrders = await buildRebalanceOrdersAsync(v, eligible, theme);
         if (!active) return;
         setOrders(rebuiltOrders);
       } catch (e) {
@@ -136,11 +137,14 @@ export function RebalancePage() {
               }));
             }}
           >
-            {options.map((option) => (
-              <option key={option.securityId} value={option.securityId}>
-                {option.symbol} — {option.name}
-              </option>
-            ))}
+            {options.map((option) => {
+              const category = option.equityCategory ? option.equityCategory.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()) : '';
+              return (
+                <option key={option.securityId} value={option.securityId}>
+                  {option.symbol} — {category ? `${category} · ` : ''}{option.name}
+                </option>
+              );
+            })}
           </select>
         );
       }

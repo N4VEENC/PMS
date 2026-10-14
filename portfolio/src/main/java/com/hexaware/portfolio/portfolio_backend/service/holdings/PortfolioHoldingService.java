@@ -101,6 +101,7 @@ public class PortfolioHoldingService {
                             security.getSymbol(),
                             security.getName(),
                             securityService.assetClass(security.getAssetType()),
+                            security.getEquityCategory(),
                             securityService.priceValue(price),
                             price.getTradeDate());
                 })

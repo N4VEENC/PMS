@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.hexaware.portfolio.portfolio_backend.entity.enums.AssetClass;
+import com.hexaware.portfolio.portfolio_backend.entity.enums.EquityCategory;
 
 public record EligibleSecurityResponse(
         Long securityId,
@@ -11,6 +12,7 @@ public record EligibleSecurityResponse(
         String symbol,
         String name,
         AssetClass assetClass,
+        EquityCategory equityCategory,
         BigDecimal latestPrice,
         LocalDate priceDate
 ) {
