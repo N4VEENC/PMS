@@ -6,15 +6,15 @@ Start the Spring Boot service on its configured port, then run:
 k6 run loadtest/loadtest.js
 ```
 
-The test lasts about 10 minutes and follows a gradual ramp-and-soak profile:
+The test lasts about 10 minutes and follows a stepped ramp-and-soak profile:
 
 | Elapsed time | Active virtual users | Phase |
 |---|---:|---|
 | 0:00–1:00 | 100 | Steady baseline |
-| 1:00–2:00 | 100 → 325 | Gradual ramp-up 1 |
-| 2:00–3:00 | 325 → 550 | Gradual ramp-up 2 |
-| 3:00–4:00 | 550 → 775 | Gradual ramp-up 3 |
-| 4:00–5:00 | 775 → 1000 | Gradual ramp-up 4 |
+| 1:00–2:00 | 100 → 325 | Stepped ramp-up 1 |
+| 2:00–3:00 | 325 → 550 | Stepped ramp-up 2 |
+| 3:00–4:00 | 550 → 775 | Stepped ramp-up 3 |
+| 4:00–5:00 | 775 → 1000 | Stepped ramp-up 4 |
 | 5:00–8:00 | 1000 | Sustained peak |
 | 8:00–9:00 | 1000 → 500 | Ramp-down 1 |
 | 9:00–10:00 | 500 → 0 | Ramp-down 2 |
@@ -36,27 +36,38 @@ and checks that the newly returned portfolio ID is present. A missing ID or
 missing read-back fails the test; Table 7 reports create attempts, responses
 with IDs, verified read-backs, and unconfirmed writes separately.
 
-The p95 latency limit is 2500 ms for each API. Existing per-API p99 limits and
-error-rate limits remain in place.
+The report declares and evaluates each API's p95, p99, and unexpected-response
+rate (ERR) SLO for every phase with requests. A phase passes only when each
+observed value is strictly below its target; phases without samples are marked
+NOT MEASURED. Targets are p95 < 2000 ms for all APIs; p99 < 2000 ms for
+signup/login, < 3000 ms for portfolio creation, and < 1500 ms for portfolio
+listing; ERR < 0.5% for signup/login/listing and < 1% for portfolio creation.
+The ERR boundary is strict, matching the k6 thresholds and breakpoint verdict:
+an observed ERR equal to its limit fails.
 
-The dashboard includes start/report timestamps, request and error totals, dropped
-iterations, a 10-second p95/active-user timeline, phase-by-phase summaries, and
-the three-manager isolation results.
+The dashboard includes start/report timestamps, request and error totals,
+dropped and inferred interrupted iterations, a 10-second p95/active-user
+timeline, phase-by-phase SLO results, and the three-manager isolation results.
+Interrupted iterations are inferred by comparing completed iterations with
+portfolio-list requests (one per iteration); the report labels the count as an
+inference because k6 does not expose it as a summary metric. Short graceful
+shutdown windows can leave an iteration incomplete even when its requests
+finished, and this count is separate from dropped iterations.
 While the test runs, the terminal prints the target API, what each virtual user
 does, the database-data warning, and one concise load-phase/progress update about
 every 10 seconds. At completion, it lists the generated report filenames.
 
-One run prints the seven tables and per-API verdicts to the console, and writes all report files:
+One run prints nine tables and per-API verdicts to the console, and writes all report files:
 
 ```text
 loadtest-report.html  Visual, self-contained dashboard (primary output)
-loadtest-report.txt   Tables 1-7 and verdicts
+loadtest-report.txt   Tables 1-9 and verdicts
 loadtest-report.json  Raw k6 summary
 ```
 
 Open `loadtest-report.html` in a browser for an at-a-glance result: pass/fail status,
 start/report timestamps, test duration, request/error totals, dropped iterations,
-peak active users, a 10-second p95/active-VU timeline, phase comparisons, and seven
+peak active users, a 10-second p95/active-VU timeline, phase comparisons, and nine
 detailed tables with failing rows highlighted. The report has no external assets or
 services and can be printed or saved as PDF from the browser.
 
@@ -118,4 +129,7 @@ counts are omitted, it expects 1000 users and 1000 owned portfolios.
 
 ## How to read TABLE 5
 
-Find WHICH API first crosses a latency/error target, during which load phase, and at what observed concurrency. The report attributes the first observed HTTP/check/timeout failure; it does not infer an unobserved database or infrastructure cause.
+Find WHICH API first crosses a latency or ERR SLO, during which load phase, and
+at what observed concurrency. The verdict uses the same strict p95, p99, and
+ERR limits as the phase SLO table; a value equal to its limit is a failure.
+The report does not infer an unobserved database or infrastructure cause.

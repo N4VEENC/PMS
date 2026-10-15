@@ -16,19 +16,19 @@ const TEST_DURATION_SECONDS = 600;
 const BASELINE_VUS = 100;
 const PEAK_VUS = 1000;
 const MANAGER_ISOLATION_USERS = 3;
-const SCENARIO_GROUP = `G_${BASELINE_VUS}_to_${PEAK_VUS}_spike`;
+const SCENARIO_GROUP = `G_${BASELINE_VUS}_to_${PEAK_VUS}_stepped_ramp`;
 const THINK_TIME_SECONDS = 2;
 const AUTH_START_STAGGER_SECONDS = 0.15;
 const AUTH_COHORT_SIZE = 60;
 const PHASE_MESSAGES = {
   baseline: `holding the steady ${BASELINE_VUS}-user baseline`,
-  spike_ramp_up_1: 'ramping up gradually from 100 toward 325 users',
-  spike_ramp_up_2: 'ramping up gradually from 325 toward 550 users',
-  spike_ramp_up_3: 'ramping up gradually from 550 toward 775 users',
-  spike_ramp_up_4: `ramping up gradually from 775 toward ${PEAK_VUS} users`,
-  spike_peak: `holding the ${PEAK_VUS}-user spike`,
-  spike_ramp_down_1: 'ramping down from 1000 toward 500 users',
-  spike_ramp_down_2: 'ramping down from 500 toward zero users',
+  stepped_ramp_up_1: 'stepped ramp from 100 toward 325 users',
+  stepped_ramp_up_2: 'stepped ramp from 325 toward 550 users',
+  stepped_ramp_up_3: 'stepped ramp from 550 toward 775 users',
+  stepped_ramp_up_4: `stepped ramp from 775 toward ${PEAK_VUS} users`,
+  peak: `holding the ${PEAK_VUS}-user peak`,
+  ramp_down_1: 'ramping down from 1000 toward 500 users',
+  ramp_down_2: 'ramping down from 500 toward zero users',
 };
 const SIGNUP_PAYLOAD_TEMPLATE = Object.freeze({ email: '', username: '', password: '' });
 const LOGIN_PAYLOAD_TEMPLATE = Object.freeze({ username: '', password: '' });
@@ -44,19 +44,25 @@ const PORTFOLIO_PAYLOAD_TEMPLATE = Object.freeze({
 const API_NAMES = ['signup', 'login', 'create_portfolio', 'list_portfolios'];
 const PHASES = [
   { name: 'baseline', start: 0, end: 60 },
-  { name: 'spike_ramp_up_1', start: 60, end: 120 },
-  { name: 'spike_ramp_up_2', start: 120, end: 180 },
-  { name: 'spike_ramp_up_3', start: 180, end: 240 },
-  { name: 'spike_ramp_up_4', start: 240, end: 300 },
-  { name: 'spike_peak', start: 300, end: 480 },
-  { name: 'spike_ramp_down_1', start: 480, end: 540 },
-  { name: 'spike_ramp_down_2', start: 540, end: 600 },
+  { name: 'stepped_ramp_up_1', start: 60, end: 120 },
+  { name: 'stepped_ramp_up_2', start: 120, end: 180 },
+  { name: 'stepped_ramp_up_3', start: 180, end: 240 },
+  { name: 'stepped_ramp_up_4', start: 240, end: 300 },
+  { name: 'peak', start: 300, end: 480 },
+  { name: 'ramp_down_1', start: 480, end: 540 },
+  { name: 'ramp_down_2', start: 540, end: 600 },
 ];
 const P95_LIMITS = {
   signup: 2000,
   login: 2000,
   create_portfolio: 2000,
   list_portfolios: 2000,
+};
+const P99_LIMITS = {
+  signup: 2000,
+  login: 2000,
+  create_portfolio: 3000,
+  list_portfolios: 1500,
 };
 const ERROR_LIMITS = {
   signup: 0.005,
@@ -98,7 +104,7 @@ function buildThresholds() {
 
   for (const api of API_NAMES) {
     const p95 = P95_LIMITS[api];
-    const p99 = api === 'create_portfolio' ? 3000 : api === 'list_portfolios' ? 1500 : 2000;
+    const p99 = P99_LIMITS[api];
     thresholds[`http_req_duration{api:${api}}`] = [`p(95)<${p95}`, `p(99)<${p99}`];
     thresholds[`api_${api}_duration_ms{api:${api}}`] = [`p(95)<${p95}`, `p(99)<${p99}`];
     thresholds[`api_${api}_errors{api:${api}}`] = ['count>=0'];
@@ -147,7 +153,7 @@ export const options = {
   scenarios: {
     [SCENARIO_GROUP]: {
       executor: 'ramping-vus',
-      exec: 'spikeTest',
+      exec: 'steppedRampTest',
       startVUs: BASELINE_VUS,
       stages: [
         { target: BASELINE_VUS, duration: '60s' },
@@ -273,6 +279,7 @@ function callApi(api, group, method, body, expectedStatus, headers = {}) {
     {
       headers: { 'Content-Type': 'application/json', ...headers },
       tags,
+      responseCallback: http.expectedStatuses(expectedStatus),
     },
   );
   const durationMs = Date.now() - start;
@@ -456,7 +463,7 @@ function runFlow(group, testData) {
   sleep(THINK_TIME_SECONDS);
 }
 
-export function spikeTest(testData) {
+export function steppedRampTest(testData) {
   if (__VU === 1) {
     const elapsed = Math.min(
       TEST_DURATION_SECONDS - 1,
@@ -537,6 +544,18 @@ function requestCount(data, api, phase = null, window = null) {
   if (phase) tags.phase = phase;
   if (window) tags.window = window;
   return countFor(data, 'api_status_count', tags);
+}
+
+function iterationAccounting(data) {
+  const completed = data.metrics?.iterations?.values?.count;
+  const listRequests = requestCount(data, 'list_portfolios');
+  const difference = Number.isFinite(completed) ? listRequests - completed : null;
+  return {
+    completed,
+    listRequests,
+    interrupted: difference !== null && difference >= 0 ? difference : null,
+    inconsistent: difference !== null && difference < 0,
+  };
 }
 
 function errorCount(data, api, phase = null, window = null) {
@@ -646,23 +665,34 @@ function groupResult(data, api, phase) {
   const errors = errorCount(data, api, phase);
   const errorPercent = requests > 0 ? errors / requests * 100 : 0;
   const p95 = values && Number.isFinite(values['p(95)']) ? values['p(95)'] : null;
+  const p99 = values && Number.isFinite(values['p(99)']) ? values['p(99)'] : null;
   const failed = requests > 0 && (
-    errorPercent > expectedFailureRate(api)
-    || (p95 !== null && p95 >= P95_LIMITS[api])
+    errorPercent >= expectedFailureRate(api)
+    || p95 === null
+    || p95 >= P95_LIMITS[api]
+    || p99 === null
+    || p99 >= P99_LIMITS[api]
   );
-  return { values, requests, errors, errorPercent, p95, failed };
+  return { values, requests, errors, errorPercent, p95, p99, failed };
 }
 
 function classifyFailure(data, api, phase = null) {
-  if (timeoutCount(data, api, phase) > 0) return 'request timeout';
-  if (statusCount(data, api, 503, phase) > 0) return 'HTTP 503';
-  if (statusCount(data, api, 500, phase) > 0) return 'HTTP 500';
-  if (statusCount(data, api, 409, phase) > 0) return 'HTTP 409 conflict';
-  if (statusCount(data, api, 401, phase) > 0) return 'HTTP 401 unauthorized';
-  if (statusCount(data, api, 429, phase) > 0) return 'HTTP 429 rate limited';
-  if (statusCount(data, api, 400, phase) > 0) return 'HTTP 400 bad request';
-  if (checksFailed(data, api, phase) > 0) return 'failed response check';
-  return 'latency threshold';
+  const result = groupResult(data, api, phase);
+  const reasons = [];
+  if (result.errorPercent >= expectedFailureRate(api)) {
+    reasons.push(`ERR ${formatNumber(result.errorPercent, 2)}% is not below ${formatNumber(expectedFailureRate(api), 2)}%`);
+  }
+  if (result.p95 === null) {
+    reasons.push('p95 unavailable');
+  } else if (result.p95 >= P95_LIMITS[api]) {
+    reasons.push(`p95 ${formatNumber(result.p95)}ms is not below ${P95_LIMITS[api]}ms`);
+  }
+  if (result.p99 === null) {
+    reasons.push('p99 unavailable');
+  } else if (result.p99 >= P99_LIMITS[api]) {
+    reasons.push(`p99 ${formatNumber(result.p99)}ms is not below ${P99_LIMITS[api]}ms`);
+  }
+  return reasons.join('; ') || 'SLO measurement unavailable';
 }
 
 function makeReport(data) {
@@ -749,7 +779,7 @@ function makeReport(data) {
     'TABLE 2 — PER-API FAILURE MODES',
     formatTable(['Endpoint', 'Error%', '409', '500', '503', 'Timeout', 'Checks fail'], failureRows),
     '',
-    'TABLE 3 — LOAD PHASE x API MATRIX (p95 ms / error%; *** = threshold failure)',
+    'TABLE 3 — LOAD PHASE x API MATRIX (p95 ms / ERR%; *** = p95, p99, or ERR SLO failure; see Table 8)',
     formatTable(['Phase', 'signup', 'login', 'create_pf', 'list_pf'], groupRows),
     '',
     'TABLE 4 — LOAD PHASE SUMMARY',
@@ -765,6 +795,58 @@ function makeReport(data) {
     formatTable(
       ['Scope', 'Create attempts', '201 + ID', 'Read-back confirmed', 'Not confirmed'],
       portfolioWriteVerificationRows(data),
+    ),
+    '',
+    'TABLE 8 — PHASE SLO RESULTS (PASS requires p95, p99, and ERR below target; ERR = unexpected responses / requests)',
+    formatTable(
+      ['Phase', 'Endpoint', 'p95 target', 'Observed p95', 'p99 target', 'Observed p99', 'ERR target', 'Observed ERR', 'SLO'],
+      PHASES.flatMap(({ name: phase }) => API_NAMES.map((api) => {
+        const result = groupResult(data, api, phase);
+        const endpoint = `${api === 'list_portfolios' ? 'GET' : 'POST'} ${API_PATHS[api]}`;
+        return [
+          phase,
+          endpoint,
+          `< ${P95_LIMITS[api]} ms`,
+          result.requests > 0 ? `${formatNumber(result.p95)} ms` : 'N/A',
+          `< ${P99_LIMITS[api]} ms`,
+          result.requests > 0 ? `${formatNumber(result.p99)} ms` : 'N/A',
+          `< ${formatNumber(expectedFailureRate(api), 2)}%`,
+          result.requests > 0 ? `${formatNumber(result.errorPercent, 2)}%` : 'N/A',
+          result.requests === 0 ? 'NOT MEASURED' : result.failed ? 'FAIL' : 'PASS',
+        ];
+      })),
+    ),
+    '',
+    'TABLE 9 — ITERATION COMPLETION',
+    formatTable(
+      ['Measure', 'Count', 'Interpretation'],
+      (() => {
+        const { completed, listRequests, interrupted, inconsistent } = iterationAccounting(data);
+        const interruptionExplanation = interrupted === null
+          ? 'Summary data is unavailable or inconsistent; interruption count cannot be inferred'
+          : interrupted === 0
+            ? 'No incomplete iterations inferred'
+            : `${interrupted} excess list requests over completed iterations; consistent with the 2s gracefulRampDown / 5s gracefulStop being shorter than the observed ${formatNumber(data.metrics?.iteration_duration?.values?.max, 1)} ms maximum iteration. Exact interruption phase is not available in the summary`;
+        return [
+          ['Completed iterations', Number.isFinite(completed) ? String(completed) : 'Unavailable', 'k6 iterations counter'],
+          ['Portfolio-list requests', String(listRequests), 'One request is issued by each measured iteration'],
+          [
+            'Interrupted iterations (inferred)',
+            inconsistent ? 'Inconsistent metrics' : interrupted === null ? 'Unavailable' : String(interrupted),
+            `${interruptionExplanation}; this is inferred, not a native k6 metric`,
+          ],
+          [
+            'Dropped iterations',
+            formatNumber(data.metrics?.dropped_iterations?.values?.count || 0),
+            'k6 dropped_iterations metric; separate from interrupted iterations',
+          ],
+          [
+            'Interpretation',
+            '—',
+            interruptionExplanation,
+          ],
+        ];
+      })(),
     ),
   ];
 
@@ -801,7 +883,7 @@ function makeReport(data) {
   const header = [
     `Test started: ${run.startedAt || 'timestamp unavailable'}`,
     `Report generated: ${run.generatedAt || 'timestamp unavailable'}`,
-    `Profile: ${run.profile || `${BASELINE_VUS}-user baseline, spike to ${PEAK_VUS}, recovery`}`,
+    `Profile: ${run.profile || `${BASELINE_VUS}-user baseline, stepped ramp to ${PEAK_VUS}, peak hold, and ramp-down`}`,
     `Actual duration: ${formatNumber(durationSeconds, 1)} seconds`,
     `Peak active VUs: ${Math.round(Math.max(...API_NAMES.map((api) => concurrency(data, api))))}`,
     `Dropped iterations: ${formatNumber(data.metrics?.dropped_iterations?.values?.count || 0)}`,
@@ -871,7 +953,9 @@ function renderTimeline(data) {
   };
   const bands = windows.map((window, index) => {
     const phase = phaseFor(window);
-    const fill = phase.startsWith('spike') ? '#fff0f2' : phase === 'baseline' ? '#eef3ff' : '#edf8f4';
+    const fill = phase.startsWith('stepped_ramp') || phase === 'peak'
+      ? '#fff0f2'
+      : phase === 'baseline' ? '#eef3ff' : '#edf8f4';
     return `<rect x="${left + index * slot}" y="${top}" width="${slot}" height="${vusBottom - top}" fill="${fill}"/>`;
   }).join('');
   const latencyGrid = Array.from(
@@ -929,7 +1013,7 @@ function renderTimeline(data) {
     ${bands}${latencyGrid}<text x="16" y="108" transform="rotate(-90 16 108)">p95 latency (ms)</text>
     ${latencyLines}${vusGrid}<text x="16" y="267" transform="rotate(-90 16 267)">Active VUs</text>
     <polyline points="${vusLine}" fill="none" stroke="#354d89" stroke-width="2.5" stroke-linejoin="round"/>${vusDots}${labels}
-    </svg></div><p class="chart-note">Each point summarizes a 10-second interval. Shading marks baseline, spike, recovery and ramp-down phases.</p>`;
+    </svg></div><p class="chart-note">Each point summarizes a 10-second interval. Shading marks baseline, stepped ramp and peak phases.</p>`;
 }
 
 function renderHtmlReport(report, data) {
@@ -940,11 +1024,14 @@ function renderHtmlReport(report, data) {
   const peakVus = API_NAMES.reduce((maximum, api) => Math.max(maximum, concurrency(data, api)), 0);
   const duration = Number(data.state && data.state.testRunDurationMs) / 1000 || 0;
   const droppedIterations = data.metrics?.dropped_iterations?.values?.count || 0;
+  const { interrupted: interruptedIterations } = iterationAccounting(data);
   const run = data.runMetadata || {};
   const thresholdFailure = Object.values(data.metrics || {}).some((metric) => (
     Object.values(metric.thresholds || {}).some((threshold) => threshold.ok === false)
   ));
-  const hasFailedGroup = parsed.tables.some(({ rows }) => rows.some((row) => row.some((cell) => cell.includes('***'))));
+  const hasFailedGroup = parsed.tables.some(({ rows }) => rows.some((row) => row.some(
+    (cell) => cell.includes('***') || cell === 'FAIL',
+  )));
   const passed = !thresholdFailure && !hasFailedGroup;
   const latencyTable = parsed.tables.find(({ title }) => title.includes('PER-API LATENCY'));
   const latencyRows = latencyTable ? latencyTable.rows.slice(1) : [];
@@ -965,7 +1052,7 @@ function renderHtmlReport(report, data) {
     const [headers, ...body] = rows;
     const headerHtml = (headers || []).map((cell) => `<th>${escapeHtml(cell)}</th>`).join('');
     const bodyHtml = body.map((row) => {
-      const failed = row.some((cell) => cell.includes('***'))
+      const failed = row.some((cell) => cell.includes('***') || cell === 'FAIL')
         || row.some((cell) => cell.includes('First observed in'));
       const cells = row.map((cell) => {
         const cleanCell = cell.replace(/\s*\*\*\*/g, '');
@@ -1014,7 +1101,7 @@ function renderHtmlReport(report, data) {
   </style>
 </head>
 <body>
-  <header class="hero"><div class="eyebrow">Load test • k6</div><h1>Portfolio API performance</h1><p>${BASELINE_VUS}-user baseline, gradual ramp to ${PEAK_VUS}, sustained peak, then ramp-down — 10-minute load profile.</p><div class="status-pill">${passed ? 'ALL THRESHOLDS PASSED' : 'THRESHOLDS CROSSED'}</div><p class="run-time">Started ${esc(startedAt)} · Generated ${esc(generatedAt)}</p></header>
+  <header class="hero"><div class="eyebrow">Load test • k6</div><h1>Portfolio API performance</h1><p>${BASELINE_VUS}-user baseline, stepped ramp to ${PEAK_VUS}, sustained peak, then ramp-down — 10-minute load profile.</p><div class="status-pill">${passed ? 'ALL THRESHOLDS PASSED' : 'THRESHOLDS CROSSED'}</div><p class="run-time">Started ${esc(startedAt)} · Generated ${esc(generatedAt)}</p></header>
   <main>
     <div class="summary">
       <article class="stat"><span>Test duration</span><strong>${esc(duration.toFixed(1))}<small> sec</small></strong></article>
@@ -1022,6 +1109,7 @@ function renderHtmlReport(report, data) {
       <article class="stat"><span>Application errors</span><strong>${esc(errors.toLocaleString())}</strong></article>
       <article class="stat"><span>Peak active VUs</span><strong>${esc(Math.round(peakVus).toLocaleString())}</strong></article>
       <article class="stat"><span>Dropped iterations</span><strong>${esc(Math.round(droppedIterations).toLocaleString())}</strong></article>
+      <article class="stat"><span>Interrupted iterations (inferred)</span><strong>${esc(interruptedIterations === null ? 'N/A' : Math.round(interruptedIterations).toLocaleString())}</strong></article>
     </div>
     <section class="panel"><div class="panel__heading"><h2>Load timeline · p95 and active users</h2></div>${timeline}</section>
     <div class="section-title"><h2>Latency at a glance</h2><p>p95 response time against the configured endpoint target</p></div>
@@ -1038,10 +1126,11 @@ function renderHtmlReport(report, data) {
 export function handleSummary(data) {
   const durationMs = Number(data.state && data.state.testRunDurationMs) || 0;
   const generatedAt = new Date().toISOString();
+  const existingMetadata = data.runMetadata || {};
   data.runMetadata = {
-    startedAt: new Date(Date.now() - durationMs).toISOString(),
+    startedAt: existingMetadata.startedAt || new Date(Date.now() - durationMs).toISOString(),
     generatedAt,
-    profile: `${BASELINE_VUS} VUs for 60s; ramp to 325, 550, 775, then ${PEAK_VUS} over four 60s stages; hold ${PEAK_VUS} for 180s; ramp down to 500 and then 0 over two 60s stages`,
+    profile: `${BASELINE_VUS} VUs for 60s; stepped ramp to 325, 550, 775, then ${PEAK_VUS} over four 60s stages; hold ${PEAK_VUS} for 180s; ramp down to 500 and then 0 over two 60s stages`,
     plannedDurationSeconds: TEST_DURATION_SECONDS,
     requestedPeakVus: PEAK_VUS,
     timeBucketSeconds: 10,
