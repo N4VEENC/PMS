@@ -13,7 +13,7 @@
 **/coverage/
 
 # Load-test binary and generated reports
-loadtest/.tools/
+
 loadtest/loadtest-report.html
 loadtest/loadtest-report.json
 loadtest/loadtest-report.txt

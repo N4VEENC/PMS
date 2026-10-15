@@ -53,10 +53,10 @@ const PHASES = [
   { name: 'spike_ramp_down_2', start: 540, end: 600 },
 ];
 const P95_LIMITS = {
-  signup: 2500,
-  login: 2500,
-  create_portfolio: 2500,
-  list_portfolios: 2500,
+  signup: 2000,
+  login: 2000,
+  create_portfolio: 2000,
+  list_portfolios: 2000,
 };
 const ERROR_LIMITS = {
   signup: 0.005,
